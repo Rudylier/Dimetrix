@@ -34,6 +34,7 @@
 }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html, body { margin: 0; }
 body {
   background: var(--bg); color: var(--text);
@@ -119,7 +120,7 @@ main { max-width: 980px; margin: 0 auto; padding: 0 20px 64px; }
 .tile-name { color: var(--text-2); font-size: 13px; font-weight: 500; }
 .tile-val { font-size: 20px; font-weight: 600; line-height: 1.2; margin-top: -6px; word-break: break-word; }
 .tile-val.muted { color: var(--text-3); font-weight: 500; font-size: 15px; }
-.spin { width: 16px; height: 16px; border-radius: 50%; border: 2px solid color-mix(in srgb, var(--blue) 25%, transparent); border-top-color: var(--blue); animation: spin .8s linear infinite; }
+.spin { display: inline-block; vertical-align: middle; flex: none; width: 16px; height: 16px; border-radius: 50%; border: 2px solid color-mix(in srgb, var(--blue) 25%, transparent); border-top-color: var(--blue); animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* ---------- сгруппированные списки ---------- */
@@ -564,7 +565,7 @@ async function runSteps(ids) {
 function renderSites(loading) {
   const cats = $("cats");
   if (loading) {
-    $("sitesNum").innerHTML = '<span class="spin" style="width:44px;height:44px;border-width:4px;margin:10px auto"></span>';
+    $("sitesNum").innerHTML = '<span class="spin" style="width:48px;height:48px;border-width:4px;margin:8px 0"></span>';
     $("sitesSub").textContent = "Проверяю все сервисы одновременно…";
     $("sitesStack").hidden = true; $("sitesLegend").hidden = true; $("sitesMeta").textContent = "";
     cats.innerHTML = [4, 3, 4, 3].map((n, k) => `<div><div class="group-label">&nbsp;</div><div class="group">${'<div class="skeleton"></div>'.repeat(n)}</div></div>`).join("");

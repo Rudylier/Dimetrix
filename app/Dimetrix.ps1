@@ -391,9 +391,17 @@ $Services = @(
         @{ name = 'Сайт chatgpt.com'; url = 'https://chatgpt.com/' },
         @{ name = 'API openai.com';   url = 'https://api.openai.com/v1/models' }) }
     @{ name = 'Claude';     cat = 'ИИ';          eps = @( @{ name = 'Сайт claude.ai'; url = 'https://claude.ai/' } ) }
-    @{ name = 'Steam';      cat = 'Игры';        eps = @(
+    @{ name = 'Cursor';     cat = 'ИИ';          note = 'Если сайт открывается, а сервер ИИ нет — редактор запустится, но чат и автодополнение работать не будут.'; eps = @(
+        @{ name = 'Сайт cursor.com';           url = 'https://cursor.com/' },
+        @{ name = 'Сервер ИИ (api2.cursor.sh)'; url = 'https://api2.cursor.sh/' },
+        @{ name = 'Вход в аккаунт';            url = 'https://authenticator.cursor.sh/' }) }
+    @{ name = 'Steam';      cat = 'Игры';        note = 'Если магазин открывается, а загрузка игр или серверы клиента нет — игры не будут качаться, а клиент не войдёт в сеть.'; eps = @(
         @{ name = 'Магазин store.steampowered.com'; url = 'https://store.steampowered.com/' },
-        @{ name = 'Сообщество steamcommunity.com';  url = 'https://steamcommunity.com/' }) }
+        @{ name = 'Сообщество steamcommunity.com';  url = 'https://steamcommunity.com/' },
+        @{ name = 'Вход в аккаунт';                 url = 'https://login.steampowered.com/' },
+        @{ name = 'Серверы клиента Steam';          url = 'https://api.steampowered.com/ISteamDirectory/GetCMListForConnect/v1/?cellid=0' },
+        @{ name = 'Картинки магазина';              url = 'https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/570/header.jpg' },
+        @{ name = 'Загрузка игр (SteamPipe)';       url = 'https://steampipe.akamaized.net/' }) }
     @{ name = 'Epic Games'; cat = 'Игры';        eps = @( @{ name = 'Сайт epicgames.com'; url = 'https://store.epicgames.com/' } ) }
     @{ name = 'Spotify';    cat = 'Музыка';      note = 'Spotify сам ушёл из России: без VPN он не работает, даже если сайт открывается.'; eps = @( @{ name = 'Сайт open.spotify.com'; url = 'https://open.spotify.com/' } ) }
     @{ name = 'Яндекс';     cat = 'Сервисы';     eps = @( @{ name = 'Сайт ya.ru'; url = 'https://ya.ru/' } ) }

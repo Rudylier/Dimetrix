@@ -1,4 +1,4 @@
-<p align="center">
+﻿<p align="center">
   <img src="app/logo.png" width="220" alt="Dimetrix">
 </p>
 
@@ -23,7 +23,7 @@ Dimetrix проверяет, почему «тормозит интернет»:
 - **Скорость** — загрузка и отдача через speed.cloudflare.com (~100 МБ трафика, можно пропустить).
 - **Автозапуск VPN** — какие VPN и прокси стартуют вместе с Windows.
 
-**Сайты и приложения** — 19 сервисов одной кнопкой, параллельно, за ~8 секунд: YouTube, Twitch, TikTok, Telegram, WhatsApp, Discord, ВКонтакте, Instagram, Facebook, X, ChatGPT, Claude, Steam, Epic Games, Spotify, Яндекс, Google, GitHub, Госуслуги. Для каждого видно, какие адреса открылись, за сколько и почему нет («таймаут», «сброс соединения — похоже на блокировку DPI», «DNS»).
+**Сайты и приложения** — 20 сервисов одной кнопкой, параллельно, за ~8 секунд: YouTube, Twitch, TikTok, Telegram, WhatsApp, Discord, ВКонтакте, Instagram, Facebook, X, ChatGPT, Claude, Cursor, Steam, Epic Games, Spotify, Яндекс, Google, GitHub, Госуслуги. Для каждого видно, какие адреса открылись, за сколько и почему нет («таймаут», «сброс соединения — похоже на блокировку DPI», «DNS»).
 
 **История** — каждая полная проверка сохраняется; графики пинга и скорости во времени, удаление записей.
 
