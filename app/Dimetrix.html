@@ -1,0 +1,842 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dimetrix</title>
+<link rel="icon" type="image/png" href="icon.png?t={{TOKEN}}">
+<style>
+:root {
+  --bg: #f5f5f7; --card: #ffffff; --card-2: #f2f2f4; --fill: rgba(118,118,128,.12);
+  --text: #1d1d1f; --text-2: #6e6e73; --text-3: #8e8e93; --sep: rgba(60,60,67,.13);
+  --blue: #0071e3; --blue-ink: #ffffff; --green: #34c759; --orange: #ff9500; --red: #ff3b30;
+  --green-soft: rgba(52,199,89,.14); --orange-soft: rgba(255,149,0,.14); --red-soft: rgba(255,59,48,.12); --gray-soft: rgba(142,142,147,.14);
+  --bar: rgba(245,245,247,.72);
+  --shadow: 0 1px 1px rgba(0,0,0,.02), 0 6px 24px rgba(0,0,0,.05);
+  --radius: 20px;
+  --ease: cubic-bezier(.2,.8,.2,1);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #000000; --card: #1c1c1e; --card-2: #2c2c2e; --fill: rgba(118,118,128,.24);
+    --text: #f5f5f7; --text-2: #a1a1a6; --text-3: #8e8e93; --sep: rgba(84,84,88,.5);
+    --blue: #0a84ff; --green: #30d158; --orange: #ff9f0a; --red: #ff453a;
+    --green-soft: rgba(48,209,88,.16); --orange-soft: rgba(255,159,10,.16); --red-soft: rgba(255,69,58,.16); --gray-soft: rgba(142,142,147,.2);
+    --bar: rgba(22,22,23,.72); --shadow: none;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #000000; --card: #1c1c1e; --card-2: #2c2c2e; --fill: rgba(118,118,128,.24);
+  --text: #f5f5f7; --text-2: #a1a1a6; --text-3: #8e8e93; --sep: rgba(84,84,88,.5);
+  --blue: #0a84ff; --green: #30d158; --orange: #ff9f0a; --red: #ff453a;
+  --green-soft: rgba(48,209,88,.16); --orange-soft: rgba(255,159,10,.16); --red-soft: rgba(255,69,58,.16); --gray-soft: rgba(142,142,147,.2);
+  --bar: rgba(22,22,23,.72); --shadow: none;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--bg); color: var(--text);
+  font: 15px/1.47 -apple-system, "SF Pro Text", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  letter-spacing: -.01em; -webkit-font-smoothing: antialiased;
+}
+.display { font-family: -apple-system, "SF Pro Display", "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif; letter-spacing: -.025em; }
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; padding: 0; }
+button:focus-visible, .row:focus-visible, .tile:focus-visible { outline: 3px solid color-mix(in srgb, var(--blue) 45%, transparent); outline-offset: 2px; }
+svg { display: block; }
+
+/* ---------- верхняя панель ---------- */
+.topbar {
+  position: sticky; top: 0; z-index: 20;
+  background: var(--bar); backdrop-filter: saturate(180%) blur(20px); -webkit-backdrop-filter: saturate(180%) blur(20px);
+  border-bottom: 1px solid var(--sep);
+}
+.topbar-in { max-width: 980px; margin: 0 auto; padding: 10px 20px; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px; }
+.brand { display: flex; align-items: center; gap: 9px; font-weight: 600; font-size: 17px; }
+.brand-logo { height: 26px; width: auto; display: block; }
+.logo-dark { display: none !important; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .logo-light { display: none !important; }
+  :root:not([data-theme="light"]) .logo-dark { display: block !important; }
+}
+:root[data-theme="dark"] .logo-light { display: none !important; }
+:root[data-theme="dark"] .logo-dark { display: block !important; }
+.hero-logo { margin: 0 auto 26px; width: 220px; }
+.hero-logo img { width: 100%; height: auto; animation: float 6s ease-in-out infinite; }
+@keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+.segmented { display: inline-flex; background: var(--fill); border-radius: 9px; padding: 2px; position: relative; }
+.segmented button { position: relative; z-index: 1; padding: 5px 16px; font-size: 13px; font-weight: 500; border-radius: 7px; color: var(--text); transition: color .2s; }
+.segmented .thumb { position: absolute; z-index: 0; top: 2px; bottom: 2px; border-radius: 7px; background: var(--card); box-shadow: 0 1px 4px rgba(0,0,0,.12), 0 0 0 .5px rgba(0,0,0,.04); transition: left .3s var(--ease), width .3s var(--ease); }
+.tools { justify-self: end; display: flex; gap: 4px; }
+.icon-btn { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; color: var(--blue); transition: background .2s; }
+.icon-btn:hover:not(:disabled) { background: var(--fill); }
+.icon-btn:disabled { opacity: .35; cursor: default; }
+.icon-btn svg { width: 18px; height: 18px; }
+
+main { max-width: 980px; margin: 0 auto; padding: 0 20px 64px; }
+.view { display: none; animation: fade .35s var(--ease); }
+.view.on { display: block; }
+@keyframes fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+/* ---------- герой ---------- */
+.hero { text-align: center; padding: 48px 0 36px; }
+.ring { width: 132px; height: 132px; margin: 0 auto 22px; position: relative; }
+.ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.ring .track { stroke: var(--fill); }
+.ring .prog { stroke: var(--blue); stroke-linecap: round; transition: stroke-dashoffset .5s var(--ease), stroke .3s; }
+.ring .glyph { position: absolute; inset: 0; display: grid; place-items: center; }
+.ring .glyph svg { width: 48px; height: 48px; transform: none; }
+.hero h1 { font-size: 40px; line-height: 1.1; font-weight: 700; margin: 0 0 8px; }
+.hero p { color: var(--text-2); font-size: 17px; margin: 0 auto; max-width: 520px; }
+.cta { display: flex; justify-content: center; gap: 12px; margin-top: 26px; flex-wrap: wrap; }
+.btn { border-radius: 980px; padding: 11px 22px; font-size: 15px; font-weight: 500; transition: background .2s, transform .1s, opacity .2s; }
+.btn:active:not(:disabled) { transform: scale(.97); }
+.btn:disabled { opacity: .4; cursor: default; }
+.btn.primary { background: var(--blue); color: var(--blue-ink); }
+.btn.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--blue) 88%, #000); }
+.btn.secondary { background: var(--fill); color: var(--blue); }
+.btn.secondary:hover:not(:disabled) { background: color-mix(in srgb, var(--fill) 100%, var(--text) 6%); }
+.meta { margin-top: 14px; color: var(--text-3); font-size: 13px; }
+
+/* ---------- плитки ---------- */
+.section-title { font-size: 22px; font-weight: 700; margin: 34px 4px 14px; }
+.tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+.tile {
+  background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow); padding: 16px 16px 15px;
+  text-align: left; display: flex; flex-direction: column; gap: 10px; min-height: 132px;
+  transition: transform .25s var(--ease), box-shadow .25s var(--ease);
+}
+.tile:hover { transform: translateY(-2px); box-shadow: 0 1px 1px rgba(0,0,0,.02), 0 12px 32px rgba(0,0,0,.08); }
+.tile-top { display: flex; align-items: center; justify-content: space-between; }
+.sym { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; background: var(--gray-soft); color: var(--text-3); }
+.sym svg { width: 17px; height: 17px; }
+.ok .sym { background: var(--green-soft); color: var(--green); }
+.warn .sym { background: var(--orange-soft); color: var(--orange); }
+.bad .sym { background: var(--red-soft); color: var(--red); }
+.run .sym { background: color-mix(in srgb, var(--blue) 14%, transparent); color: var(--blue); }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--fill); }
+.ok .dot { background: var(--green); } .warn .dot { background: var(--orange); } .bad .dot { background: var(--red); }
+.tile-name { color: var(--text-2); font-size: 13px; font-weight: 500; }
+.tile-val { font-size: 20px; font-weight: 600; line-height: 1.2; margin-top: -6px; word-break: break-word; }
+.tile-val.muted { color: var(--text-3); font-weight: 500; font-size: 15px; }
+.spin { width: 16px; height: 16px; border-radius: 50%; border: 2px solid color-mix(in srgb, var(--blue) 25%, transparent); border-top-color: var(--blue); animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ---------- сгруппированные списки ---------- */
+.group { background: var(--card); border-radius: 14px; box-shadow: var(--shadow); overflow: hidden; }
+.group + .group-label { margin-top: 26px; }
+.group-label { color: var(--text-2); font-size: 13px; text-transform: uppercase; letter-spacing: .02em; margin: 0 16px 7px; }
+.group-foot { color: var(--text-3); font-size: 13px; margin: 7px 16px 0; }
+.row { display: flex; align-items: center; gap: 12px; padding: 11px 16px; min-height: 48px; width: 100%; text-align: left; position: relative; }
+.row + .row::before, .row + .expand + .row::before { content: ""; position: absolute; top: 0; right: 0; left: 58px; border-top: 1px solid var(--sep); }
+button.row:hover { background: color-mix(in srgb, var(--fill) 50%, transparent); }
+.av { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; font-weight: 600; font-size: 14px; flex: none; background: var(--gray-soft); color: var(--text-3); }
+.ok .av { background: var(--green-soft); color: var(--green); } .warn .av { background: var(--orange-soft); color: var(--orange); } .bad .av { background: var(--red-soft); color: var(--red); }
+.row-main { flex: 1; min-width: 0; }
+.row-title { font-size: 15px; }
+.row-sub { font-size: 13px; color: var(--text-2); }
+.row-end { display: flex; align-items: center; gap: 8px; color: var(--text-2); font-size: 15px; white-space: nowrap; }
+.ok .row-end { color: var(--green); } .warn .row-end { color: var(--orange); } .bad .row-end { color: var(--red); }
+.chev { width: 8px; height: 13px; color: var(--text-3); transition: transform .25s var(--ease); flex: none; }
+.row[aria-expanded="true"] .chev { transform: rotate(90deg); }
+.expand { display: none; padding: 0 16px 12px 58px; }
+.expand.on { display: block; }
+.lines { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 13px; color: var(--text-2); }
+.lines li { display: flex; gap: 9px; }
+.lines li::before { content: ""; width: 6px; height: 6px; border-radius: 50%; margin-top: 7px; flex: none; background: var(--text-3); }
+.lines li.ok::before { background: var(--green); } .lines li.warn::before { background: var(--orange); } .lines li.bad::before { background: var(--red); }
+.lines li.ok, .lines li.info { color: var(--text); } .lines li.warn { color: var(--text); } .lines li.bad { color: var(--text); }
+.lines li.dim { color: var(--text-3); }
+
+.issues .row { cursor: pointer; }
+.issue-ico { width: 22px; height: 22px; flex: none; }
+
+/* ---------- сайты ---------- */
+.sites-hero { text-align: center; padding: 48px 0 30px; }
+.big-num { font-size: 64px; font-weight: 700; line-height: 1; letter-spacing: -.04em; }
+.big-num small { font-size: 28px; color: var(--text-3); font-weight: 600; letter-spacing: -.02em; }
+.stack { display: flex; height: 6px; border-radius: 6px; overflow: hidden; background: var(--fill); max-width: 360px; margin: 18px auto 0; }
+.stack span { height: 100%; transition: width .5s var(--ease); }
+.legend { display: flex; justify-content: center; gap: 18px; margin-top: 12px; color: var(--text-2); font-size: 13px; }
+.legend i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; }
+.cats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 26px 20px; align-items: start; }
+.skeleton { height: 48px; background: linear-gradient(90deg, transparent, var(--fill), transparent); background-size: 200% 100%; animation: shimmer 1.2s infinite; }
+.skeleton + .skeleton { border-top: 1px solid var(--sep); }
+@keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+
+/* ---------- журнал ---------- */
+.log-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 40px 4px 14px; flex-wrap: wrap; }
+.log-head h2 { margin: 0; font-size: 28px; font-weight: 700; }
+.link { color: var(--blue); font-size: 15px; }
+.link:hover { text-decoration: underline; }
+.log-row { display: grid; grid-template-columns: 64px 1fr; gap: 12px; padding: 10px 16px; font-size: 14px; position: relative; }
+.log-row + .log-row::before { content: ""; position: absolute; top: 0; left: 16px; right: 0; border-top: 1px solid var(--sep); }
+.log-row .t { color: var(--text-3); font-variant-numeric: tabular-nums; font-size: 13px; padding-top: 1px; }
+.log-row .s { color: var(--text-3); font-size: 12px; }
+.log-row.ok .m::before, .log-row.warn .m::before, .log-row.bad .m::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 8px; vertical-align: 1px; }
+.log-row.ok .m::before { background: var(--green); } .log-row.warn .m::before { background: var(--orange); } .log-row.bad .m::before { background: var(--red); }
+.log-row.dim .m { color: var(--text-3); }
+.empty { padding: 28px 16px; text-align: center; color: var(--text-3); }
+
+/* ---------- история ---------- */
+.charts { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; margin-bottom: 26px; }
+.chart-card { background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow); padding: 16px 16px 10px; position: relative; }
+.chart-card h4 { margin: 0; font-size: 13px; color: var(--text-2); font-weight: 500; }
+.chart-now { font-size: 26px; font-weight: 700; margin: 2px 0 0; }
+.chart-now small { font-size: 14px; color: var(--text-2); font-weight: 500; margin-left: 4px; }
+.chart-cap { font-size: 12px; color: var(--text-3); margin-bottom: 6px; }
+.chart-box { position: relative; height: 150px; }
+.chart-box svg { width: 100%; height: 100%; overflow: visible; }
+.chart-box .grid line { stroke: var(--sep); stroke-width: 1; }
+.chart-box .axis text { fill: var(--text-3); font-size: 11px; }
+.chart-box .line { fill: none; stroke: var(--blue); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.chart-box .area { fill: var(--blue); opacity: .08; }
+.chart-box .pt { fill: var(--blue); stroke: var(--card); stroke-width: 2; }
+.chart-box .cross { stroke: var(--text-3); stroke-width: 1; stroke-dasharray: 3 3; }
+.chart-tip { position: absolute; pointer-events: none; background: var(--card); border: 1px solid var(--sep); border-radius: 10px; padding: 6px 10px;
+  font-size: 12px; box-shadow: 0 6px 20px rgba(0,0,0,.12); white-space: nowrap; transform: translate(-50%, -110%); display: none; }
+.chart-tip b { font-size: 14px; }
+.chart-empty { height: 150px; display: grid; place-items: center; color: var(--text-3); font-size: 13px; text-align: center; padding: 0 20px; }
+.hist-day + .hist-day { margin-top: 24px; }
+.sheet-actions { gap: 10px; }
+.btn.danger { background: var(--red-soft); color: var(--red); }
+@media (max-width: 860px) { .charts { grid-template-columns: 1fr; } }
+
+/* ---------- лист с подробностями ---------- */
+.sheet-back { position: fixed; inset: 0; z-index: 50; background: rgba(0,0,0,.28); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  display: grid; place-items: center; padding: 20px; opacity: 0; pointer-events: none; transition: opacity .25s var(--ease); }
+.sheet-back.on { opacity: 1; pointer-events: auto; }
+.sheet { width: 100%; max-width: 560px; max-height: 82vh; overflow: auto; background: var(--bg); border-radius: 22px; padding: 22px 20px 20px;
+  box-shadow: 0 30px 80px rgba(0,0,0,.25); transform: translateY(16px) scale(.98); transition: transform .3s var(--ease); }
+.sheet-back.on .sheet { transform: none; }
+.sheet-head { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 18px; }
+.sheet-head .sym { width: 40px; height: 40px; border-radius: 11px; }
+.sheet-head .sym svg { width: 22px; height: 22px; }
+.sheet-head h3 { margin: 0; font-size: 22px; font-weight: 700; }
+.sheet-head p { margin: 2px 0 0; color: var(--text-2); font-size: 14px; }
+.sheet-head .icon-btn { margin-left: auto; background: var(--fill); color: var(--text-2); width: 30px; height: 30px; }
+.sheet .group .lines { padding: 14px 16px; gap: 10px; font-size: 14px; }
+.sheet-actions { display: flex; justify-content: flex-end; margin-top: 16px; }
+
+.toast { position: fixed; left: 50%; bottom: 28px; z-index: 60; transform: translate(-50%, 16px); opacity: 0;
+  background: var(--bar); backdrop-filter: saturate(180%) blur(20px); -webkit-backdrop-filter: saturate(180%) blur(20px);
+  border: 1px solid var(--sep); border-radius: 980px; padding: 10px 18px; font-size: 14px; font-weight: 500; box-shadow: 0 10px 30px rgba(0,0,0,.12);
+  transition: all .3s var(--ease); pointer-events: none; }
+.toast.on { opacity: 1; transform: translate(-50%, 0); }
+.offline { display: none; margin: 16px 0 0; background: var(--red-soft); color: var(--red); border-radius: 12px; padding: 12px 16px; font-size: 14px; text-align: center; }
+
+@media (max-width: 860px) { .tiles { grid-template-columns: repeat(2, 1fr); } .cats { grid-template-columns: 1fr; } }
+@media (max-width: 560px) {
+  .topbar-in { grid-template-columns: 1fr auto; } .brand span { display: none; }
+  .segmented { grid-column: 1 / -1; grid-row: 2; justify-self: center; }
+  .hero h1 { font-size: 30px; } main { padding: 0 16px 48px; }
+}
+@media (prefers-reduced-motion: reduce) { *, *::before { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-in">
+    <div class="brand">
+      <img class="brand-logo logo-light" src="logo.png?t={{TOKEN}}" alt="">
+      <img class="brand-logo logo-dark" src="logo-dark.png?t={{TOKEN}}" alt="">
+      <span class="display">Dimetrix</span>
+    </div>
+    <nav class="segmented" id="tabs" role="tablist">
+      <span class="thumb" id="thumb"></span>
+      <button role="tab" data-tab="overview">Обзор</button>
+      <button role="tab" data-tab="sites">Сайты</button>
+      <button role="tab" data-tab="history">История</button>
+      <button role="tab" data-tab="log">Журнал</button>
+    </nav>
+    <div class="tools">
+      <button class="icon-btn" id="btnCopy" title="Скопировать отчёт" aria-label="Скопировать отчёт" disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2.5"/><path d="M5 15V6.5A2.5 2.5 0 0 1 7.5 4H15"/></svg></button>
+      <button class="icon-btn" id="btnSave" title="Сохранить отчёт в файл" aria-label="Сохранить отчёт в файл" disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7.5 10.5 12 15l4.5-4.5M5 19h14"/></svg></button>
+      <button class="icon-btn" id="btnTheme" title="Светлая или тёмная тема" aria-label="Сменить тему">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg></button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div class="offline" id="offline">Dimetrix закрыт. Запусти Dimetrix.cmd ещё раз.</div>
+
+  <!-- Обзор -->
+  <section class="view" id="view-overview">
+    <div class="hero">
+      <div class="hero-logo" id="heroLogo">
+        <img class="logo-light" src="logo.png?t={{TOKEN}}" alt="Dimetrix">
+        <img class="logo-dark" src="logo-dark.png?t={{TOKEN}}" alt="Dimetrix">
+      </div>
+      <div class="ring" id="ring" hidden>
+        <svg viewBox="0 0 120 120"><circle class="track" cx="60" cy="60" r="52" fill="none" stroke-width="8"/>
+          <circle class="prog" id="ringProg" cx="60" cy="60" r="52" fill="none" stroke-width="8" stroke-dasharray="326.7" stroke-dashoffset="326.7"/></svg>
+        <div class="glyph" id="ringGlyph"></div>
+      </div>
+      <h1 class="display" id="heroTitle">Проверим сеть</h1>
+      <p id="heroSub">Пинг, DNS, VPN, прокси, скорость и программы, которые нагружают интернет. Ничего не меняется в системе.</p>
+      <div class="cta">
+        <button class="btn primary" id="btnAll">Проверить всё</button>
+        <button class="btn secondary" id="btnQuick">Без теста скорости</button>
+      </div>
+      <div class="meta" id="heroMeta">Тест скорости скачивает около 100 МБ</div>
+    </div>
+
+    <div id="issuesWrap" hidden>
+      <div class="section-title display">Что стоит исправить</div>
+      <div class="group issues" id="issues"></div>
+    </div>
+
+    <div class="section-title display">Показатели</div>
+    <div class="tiles" id="tiles"></div>
+  </section>
+
+  <!-- Сайты -->
+  <section class="view" id="view-sites">
+    <div class="sites-hero">
+      <div class="big-num display" id="sitesNum">—</div>
+      <p style="color:var(--text-2);font-size:17px;margin:10px 0 0" id="sitesSub">Проверим YouTube, Telegram, Discord, WhatsApp, соцсети, игры и другие сервисы — около 10 секунд.</p>
+      <div class="stack" id="sitesStack" hidden></div>
+      <div class="legend" id="sitesLegend" hidden></div>
+      <div class="cta"><button class="btn primary" id="btnSites">Проверить сайты</button></div>
+      <div class="meta" id="sitesMeta"></div>
+    </div>
+    <div class="cats" id="cats"></div>
+  </section>
+
+  <!-- История -->
+  <section class="view" id="view-history">
+    <div class="log-head">
+      <h2 class="display">История</h2>
+      <div style="display:flex;gap:14px;align-items:center">
+        <nav class="segmented" id="histFilter">
+          <span class="thumb"></span>
+          <button data-f="all">Все</button>
+          <button data-f="overview">Сеть</button>
+          <button data-f="sites">Сайты</button>
+        </nav>
+        <button class="link" id="btnHistClear">Очистить</button>
+      </div>
+    </div>
+    <div class="charts" id="charts"></div>
+    <div id="histList"></div>
+  </section>
+
+  <!-- Журнал -->
+  <section class="view" id="view-log">
+    <div class="log-head">
+      <h2 class="display">Журнал</h2>
+      <div style="display:flex;gap:14px;align-items:center">
+        <nav class="segmented" id="logFilter">
+          <span class="thumb"></span>
+          <button data-f="all">Все</button>
+          <button data-f="problems">Проблемы</button>
+        </nav>
+        <button class="link" id="btnClear">Очистить</button>
+      </div>
+    </div>
+    <div class="group" id="log"></div>
+  </section>
+</main>
+
+<div class="sheet-back" id="sheetBack" aria-hidden="true">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+    <div class="sheet-head">
+      <div class="sym" id="sheetSym"></div>
+      <div><h3 class="display" id="sheetTitle"></h3><p id="sheetSub"></p></div>
+      <button class="icon-btn" id="sheetClose" aria-label="Закрыть"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M7 7l10 10M17 7 7 17"/></svg></button>
+    </div>
+    <div class="group"><ul class="lines" id="sheetLines"></ul></div>
+    <div class="sheet-actions" id="sheetActions"></div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const TOKEN = "{{TOKEN}}";
+const api = (p) => fetch(p + (p.includes("?") ? "&" : "?") + "t=" + TOKEN, { cache: "no-store" });
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const now = () => new Date().toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+const arr = (x) => Array.isArray(x) ? x : (x ? [x] : []);
+const store = { get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} } };
+
+const P = (d) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+const ICONS = {
+  connection: P('<path d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1"/><path d="M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1"/>'),
+  proxy: P('<path d="M4 7h13l-3-3M20 17H7l3 3"/>'),
+  ping: P('<path d="M3 12h3l2-5 4 10 2-5h7"/>'),
+  dns: P('<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.5 2.6 2.5 14.4 0 17M12 3.5c-2.5 2.6-2.5 14.4 0 17"/>'),
+  load: P('<path d="M5 18a8 8 0 1 1 14 0"/><path d="M12 14l3.5-4"/>'),
+  connections: P('<circle cx="6" cy="6" r="2.2"/><circle cx="18" cy="6" r="2.2"/><circle cx="12" cy="18" r="2.2"/><path d="M7.6 7.6 10.6 16M16.4 7.6 13.4 16M8.2 6h7.6"/>'),
+  speed: P('<path d="M13 3 5 14h6l-1 7 8-11h-6z"/>'),
+  autostart: P('<path d="M12 3v8"/><path d="M6.3 7.2a7.5 7.5 0 1 0 11.4 0"/>'),
+};
+const GLYPH = {
+  idle: P('<path d="M3 12h3.5l2.5-6 5 12 2.5-6H21"/>'),
+  ok: P('<path d="M5 12.5l4.5 4.5L19 7.5"/>'),
+  warn: P('<path d="M12 7v6M12 17h.01"/>'),
+  bad: P('<path d="M7 7l10 10M17 7 7 17"/>'),
+};
+const COLOR = { ok: "var(--green)", warn: "var(--orange)", bad: "var(--red)", run: "var(--blue)", idle: "var(--text-3)" };
+const LEVEL_TXT = { ok: "Норма", warn: "Внимание", bad: "Проблема", info: "Инфо" };
+const CHEV = '<svg class="chev" viewBox="0 0 8 13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 1.5 6.5 6.5 1.5 11.5"/></svg>';
+
+let steps = [], results = {}, sites = null, logRows = [], busy = false, logFilter = "all", lastRun = null, sheetStep = null;
+
+function toast(msg) { const t = $("toast"); t.textContent = msg; t.classList.add("on"); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove("on"), 1800); }
+
+// ---------- сегментированные переключатели ----------
+function moveThumb(nav) {
+  const on = nav.querySelector("button.on"), th = nav.querySelector(".thumb");
+  if (!on || !th) return;
+  th.style.left = on.offsetLeft + "px"; th.style.width = on.offsetWidth + "px";
+}
+function setTab(tab) {
+  document.querySelectorAll("#tabs button").forEach(b => { const on = b.dataset.tab === tab; b.classList.toggle("on", on); b.setAttribute("aria-selected", on); });
+  document.querySelectorAll(".view").forEach(v => v.classList.toggle("on", v.id === "view-" + tab));
+  moveThumb($("tabs")); store.set("dimetrix-tab", tab);
+  if (tab === "log") moveThumb($("logFilter"));
+  if (tab === "history") { moveThumb($("histFilter")); if (typeof renderCharts === "function" && steps) renderCharts(); }
+}
+document.querySelectorAll("#tabs button").forEach(b => b.onclick = () => setTab(b.dataset.tab));
+document.querySelectorAll("#logFilter button").forEach(b => b.onclick = () => {
+  logFilter = b.dataset.f;
+  document.querySelectorAll("#logFilter button").forEach(x => x.classList.toggle("on", x === b));
+  moveThumb($("logFilter")); renderLog();
+});
+document.querySelector('#logFilter [data-f="all"]').classList.add("on");
+addEventListener("resize", () => {
+  moveThumb($("tabs")); moveThumb($("logFilter")); moveThumb($("histFilter"));
+  clearTimeout(window.__rz); window.__rz = setTimeout(() => { if ($("view-history").classList.contains("on")) renderCharts(); }, 150);
+});
+
+// ---------- тема ----------
+(function () { const t = store.get("dimetrix-theme"); if (t) document.documentElement.dataset.theme = t; })();
+$("btnTheme").onclick = () => {
+  const cur = document.documentElement.dataset.theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+  const next = cur === "dark" ? "light" : "dark";
+  document.documentElement.dataset.theme = next; store.set("dimetrix-theme", next);
+};
+
+// ---------- обзор ----------
+function overall() {
+  const done = steps.map(s => results[s.id]).filter(r => r && r !== "running");
+  const siteBad = sites ? sites.services.filter(s => s.level === "bad").length : 0;
+  const bad = done.filter(r => r.level === "bad").length, warn = done.filter(r => r.level === "warn").length;
+  return { done: done.length, bad, warn, siteBad };
+}
+
+function setRing(state, pct) {
+  $("heroLogo").hidden = state !== "idle"; $("ring").hidden = state === "idle";
+  const c = 2 * Math.PI * 52, prog = $("ringProg");
+  prog.style.stroke = COLOR[state] || COLOR.run;
+  prog.style.strokeDashoffset = c * (1 - Math.max(0, Math.min(1, pct)));
+  const g = $("ringGlyph");
+  g.style.color = COLOR[state] || COLOR.idle;
+  g.innerHTML = state === "run" ? `<div class="display" style="font-size:28px;font-weight:700;color:var(--text)">${Math.round(pct * 100)}%</div>` : (GLYPH[state] || GLYPH.idle);
+}
+
+function renderHero() {
+  if (busy) return;
+  const o = overall();
+  if (!o.done) { setRing("idle", 0); return; }
+  const state = o.bad ? "bad" : o.warn ? "warn" : "ok";
+  setRing(state, 1);
+  $("heroTitle").textContent = o.bad ? "Найдены проблемы" : o.warn ? "Есть замечания" : "Сеть в порядке";
+  const parts = [];
+  if (o.bad) parts.push(`${o.bad} ${plural(o.bad, "проблема", "проблемы", "проблем")}`);
+  if (o.warn) parts.push(`${o.warn} ${plural(o.warn, "замечание", "замечания", "замечаний")}`);
+  $("heroSub").textContent = parts.length ? parts.join(" и ") + ". Подробности — ниже, нажми на любой показатель." : "Всё работает как надо. Нажми на показатель, чтобы увидеть детали.";
+  $("heroMeta").textContent = "Последняя проверка: " + (lastRun || "—");
+}
+const plural = (n, a, b, c) => { const m = n % 10, h = n % 100; return m === 1 && h !== 11 ? a : m >= 2 && m <= 4 && (h < 10 || h >= 20) ? b : c; };
+
+function renderTiles() {
+  $("tiles").innerHTML = steps.map(s => {
+    const r = results[s.id], running = r === "running";
+    const lv = running ? "run" : r ? r.level : "";
+    const val = running ? '<div class="tile-val muted">Проверяю…</div>' : r ? `<div class="tile-val">${esc(r.metric || LEVEL_TXT[r.level])}</div>`
+      : `<div class="tile-val muted">${s.slow ? "≈20 сек" : "Не проверено"}</div>`;
+    const end = running ? '<span class="spin"></span>' : '<span class="dot"></span>';
+    return `<button class="tile ${lv}" data-id="${s.id}" ${r && !running ? "" : 'aria-disabled="true"'}>
+      <div class="tile-top"><span class="sym">${ICONS[s.id] || ""}</span>${end}</div>
+      <div class="tile-name">${esc(s.title)}</div>${val}</button>`;
+  }).join("");
+  $("tiles").querySelectorAll(".tile").forEach(t => t.onclick = () => {
+    const r = results[t.dataset.id];
+    if (r && r !== "running") openSheet(t.dataset.id); else if (!busy) runSteps([t.dataset.id]);
+  });
+}
+
+function renderIssues() {
+  const items = [];
+  for (const s of steps) {
+    const r = results[s.id]; if (!r || r === "running") continue;
+    r.lines.filter(l => l.l === "bad" || l.l === "warn").forEach(l => items.push({ lv: l.l, t: l.t, sub: s.title, id: s.id }));
+  }
+  if (sites) sites.services.filter(x => x.level === "bad").forEach(x => items.push({ lv: "bad", t: `${x.name} не открывается`, sub: "Сайты и приложения", tab: "sites" }));
+  items.sort((a, b) => (a.lv === "bad" ? 0 : 1) - (b.lv === "bad" ? 0 : 1));
+  $("issuesWrap").hidden = !items.length;
+  $("issues").innerHTML = items.map((x, i) => `
+    <button class="row ${x.lv}" data-i="${i}">
+      <svg class="issue-ico" viewBox="0 0 24 24" fill="${x.lv === "bad" ? "var(--red)" : "var(--orange)"}"><circle cx="12" cy="12" r="10"/><path d="M12 7v6M12 16.5h.01" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/></svg>
+      <div class="row-main"><div class="row-title">${esc(x.t)}</div><div class="row-sub">${esc(x.sub)}</div></div>${CHEV}</button>`).join("");
+  $("issues").querySelectorAll(".row").forEach(b => b.onclick = () => {
+    const x = items[+b.dataset.i];
+    if (x.tab) setTab(x.tab); else openSheet(x.id);
+  });
+}
+
+// ---------- лист подробностей ----------
+function showSheet({ title, sub, icon, level, lines, actions = [] }) {
+  const sym = $("sheetSym"); sym.className = "sym"; sym.parentElement.className = "sheet-head " + (level || "");
+  sym.innerHTML = icon || "";
+  $("sheetTitle").textContent = title; $("sheetSub").textContent = sub || "";
+  $("sheetLines").innerHTML = lines.map(l => `<li class="${l.l}">${esc(l.t)}</li>`).join("") || '<li class="dim">Нет данных</li>';
+  const act = $("sheetActions"); act.innerHTML = "";
+  actions.forEach(a => {
+    const b = document.createElement("button"); b.className = "btn " + (a.kind || "secondary"); b.textContent = a.label;
+    b.disabled = !!a.needIdle && busy; b.onclick = a.onClick; act.appendChild(b);
+  });
+  $("sheetBack").classList.add("on"); $("sheetBack").setAttribute("aria-hidden", "false");
+  $("sheetClose").focus();
+}
+function openSheet(id) {
+  const s = steps.find(x => x.id === id), r = results[id];
+  if (!s || !r || r === "running") return;
+  showSheet({ title: s.title, sub: `${r.metric || LEVEL_TXT[r.level]} · ${r.at} · ${(r.ms / 1000).toFixed(1)} с`,
+    icon: ICONS[id], level: r.level, lines: r.lines,
+    actions: [{ label: "Проверить ещё раз", needIdle: true, onClick: () => { closeSheet(); runSteps([id]); } }] });
+}
+function closeSheet() { $("sheetBack").classList.remove("on"); $("sheetBack").setAttribute("aria-hidden", "true"); }
+$("sheetClose").onclick = closeSheet;
+$("sheetBack").onclick = (e) => { if (e.target === $("sheetBack")) closeSheet(); };
+addEventListener("keydown", (e) => { if (e.key === "Escape") closeSheet(); });
+
+// ---------- запуск проверок ----------
+function setBusy(v) {
+  busy = v;
+  ["btnAll", "btnQuick", "btnSites"].forEach(id => $(id).disabled = v);
+  const has = Object.values(results).some(r => r && r !== "running") || !!sites;
+  $("btnCopy").disabled = v || !has; $("btnSave").disabled = v || !has;
+}
+
+async function runSteps(ids) {
+  if (busy || !ids.length) return;
+  setBusy(true); setTab("overview");
+  logRows.push({ time: now(), step: "", l: "dim", t: ids.length > 1 ? "Начата проверка сети" : "Повторная проверка" });
+  for (let i = 0; i < ids.length; i++) {
+    const s = steps.find(x => x.id === ids[i]);
+    results[s.id] = "running"; renderTiles();
+    setRing("run", i / ids.length);
+    $("heroTitle").textContent = "Проверяю…";
+    $("heroSub").textContent = s.title + (s.slow ? " — около 20 секунд" : "");
+    $("heroMeta").textContent = `Шаг ${i + 1} из ${ids.length}`;
+    try {
+      const res = await api("/api/run?step=" + s.id);
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const r = await res.json();
+      r.lines = arr(r.lines); r.at = now(); results[s.id] = r;
+      r.lines.forEach(l => logRows.push({ time: r.at, step: s.title, l: l.l, t: l.t }));
+    } catch (e) {
+      results[s.id] = { level: "bad", metric: "Ошибка", ms: 0, at: now(), lines: [{ l: "bad", t: "Не удалось выполнить проверку: " + e.message }] };
+      logRows.push({ time: now(), step: s.title, l: "bad", t: "Не удалось выполнить проверку: " + e.message });
+    }
+    renderTiles(); setRing("run", (i + 1) / ids.length);
+  }
+  lastRun = new Date().toLocaleString("ru-RU", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" });
+  setBusy(false); renderHero(); renderTiles(); renderIssues(); renderLog();
+  if (ids.length > 1) {
+    const done = ids.map(id => ({ id, ...results[id] }));
+    saveHistory({
+      type: "overview", full: ids.length === steps.length,
+      counts: { bad: done.filter(r => r.level === "bad").length, warn: done.filter(r => r.level === "warn").length },
+      steps: done.map(r => ({ id: r.id, title: r.title, level: r.level, metric: r.metric, num: r.num || null, lines: r.lines })),
+    });
+  }
+}
+
+// ---------- сайты ----------
+function renderSites(loading) {
+  const cats = $("cats");
+  if (loading) {
+    $("sitesNum").innerHTML = '<span class="spin" style="width:44px;height:44px;border-width:4px;margin:10px auto"></span>';
+    $("sitesSub").textContent = "Проверяю все сервисы одновременно…";
+    $("sitesStack").hidden = true; $("sitesLegend").hidden = true; $("sitesMeta").textContent = "";
+    cats.innerHTML = [4, 3, 4, 3].map((n, k) => `<div><div class="group-label">&nbsp;</div><div class="group">${'<div class="skeleton"></div>'.repeat(n)}</div></div>`).join("");
+    return;
+  }
+  if (!sites) return;
+  const list = sites.services, n = { ok: 0, warn: 0, bad: 0 };
+  list.forEach(s => n[s.level] = (n[s.level] || 0) + 1);
+  $("sitesNum").innerHTML = `${n.ok}<small> из ${list.length}</small>`;
+  $("sitesSub").textContent = n.bad ? `Не открываются: ${list.filter(s => s.level === "bad").map(s => s.name).join(", ")}` : n.warn ? "Почти всё работает, есть частичные проблемы" : "Все сервисы работают";
+  $("sitesStack").hidden = false; $("sitesLegend").hidden = false;
+  $("sitesStack").innerHTML = ["ok", "warn", "bad"].map(k => `<span style="width:${n[k] / list.length * 100}%;background:${COLOR[k]}"></span>`).join("");
+  $("sitesLegend").innerHTML = `<span><i style="background:var(--green)"></i>Работают ${n.ok}</span><span><i style="background:var(--orange)"></i>Частично ${n.warn}</span><span><i style="background:var(--red)"></i>Не открываются ${n.bad}</span>`;
+  $("sitesMeta").textContent = `Проверено в ${sites.at}, трафик идёт через «${sites.via}»`;
+  const groups = [...new Set(list.map(s => s.cat))];
+  cats.innerHTML = groups.map(c => `<div><div class="group-label">${esc(c)}</div><div class="group">` +
+    list.filter(s => s.cat === c).map(s => {
+      const k = list.indexOf(s);
+      return `<button class="row ${s.level}" data-k="${k}" aria-expanded="false">
+        <span class="av">${esc(s.name.charAt(0))}</span>
+        <div class="row-main"><div class="row-title">${esc(s.name)}</div></div>
+        <span class="row-end">${esc(s.status)}${s.ms && s.level !== "bad" ? `<span style="color:var(--text-3)">${s.ms} мс</span>` : ""}</span>${CHEV}</button>
+        <div class="expand" id="exp-${k}"><ul class="lines">${s.lines.map(l => `<li class="${l.l}">${esc(l.t)}</li>`).join("")}</ul></div>`;
+    }).join("") + "</div></div>").join("");
+  cats.querySelectorAll(".row").forEach(b => b.onclick = () => {
+    const open = b.getAttribute("aria-expanded") !== "true";
+    b.setAttribute("aria-expanded", open); $("exp-" + b.dataset.k).classList.toggle("on", open);
+  });
+}
+
+async function runSites() {
+  if (busy) return;
+  setBusy(true); setTab("sites"); renderSites(true);
+  try {
+    const res = await api("/api/services");
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const r = await res.json();
+    r.services = arr(r.services).map(s => ({ ...s, lines: arr(s.lines) }));
+    r.at = now(); sites = r;
+    logRows.push({ time: now(), step: "", l: "dim", t: "Проверка сайтов и приложений" });
+    r.services.forEach(s => logRows.push({ time: r.at, step: "Сайты", l: s.level, t: `${s.name}: ${s.status}` }));
+    saveHistory({
+      type: "sites", via: r.via,
+      counts: { ok: r.services.filter(s => s.level === "ok").length, warn: r.services.filter(s => s.level === "warn").length, bad: r.services.filter(s => s.level === "bad").length, total: r.services.length },
+      services: r.services.map(s => ({ name: s.name, cat: s.cat, level: s.level, status: s.status, ms: s.ms, lines: s.lines })),
+    });
+  } catch (e) {
+    $("sitesNum").textContent = "—";
+    $("sitesSub").textContent = "Не удалось проверить сайты: " + e.message;
+    $("cats").innerHTML = "";
+  }
+  setBusy(false); renderSites(false); renderIssues(); renderLog();
+}
+
+// ---------- история ----------
+let history = [], histFilter = "all";
+const newId = () => Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
+
+async function saveHistory(entry) {
+  const e = { id: newId(), at: new Date().toISOString(), ...entry };
+  try {
+    const r = await fetch("/api/history?t=" + TOKEN, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(e) });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    history.push(e); renderHistory();
+  } catch (err) { toast("Не удалось сохранить в историю"); }
+}
+async function loadHistory() {
+  try { history = arr(await (await api("/api/history")).json()); } catch (e) { history = []; }
+  renderHistory();
+}
+
+function entryLevel(e) { return e.counts.bad ? "bad" : e.counts.warn ? "warn" : "ok"; }
+function entrySummary(e) {
+  if (e.type === "sites") {
+    const c = e.counts; let s = `Работают ${c.ok} из ${c.total}`;
+    const badNames = e.services.filter(x => x.level === "bad").map(x => x.name);
+    if (badNames.length) s += ` · не открываются: ${badNames.join(", ")}`;
+    return s;
+  }
+  const c = e.counts, parts = [];
+  if (c.bad) parts.push(`${c.bad} ${plural(c.bad, "проблема", "проблемы", "проблем")}`);
+  if (c.warn) parts.push(`${c.warn} ${plural(c.warn, "замечание", "замечания", "замечаний")}`);
+  const ping = e.steps.find(s => s.id === "ping"), sp = e.steps.find(s => s.id === "speed");
+  if (ping && ping.num) parts.push(`пинг ${ping.num.ping} мс`);
+  if (sp && sp.num && sp.num.down != null) parts.push(`↓${sp.num.down} Мбит/с`);
+  return parts.length ? parts.join(" · ") : "Всё в порядке";
+}
+function dayLabel(d) {
+  const t = new Date(); t.setHours(0, 0, 0, 0);
+  const x = new Date(d); x.setHours(0, 0, 0, 0);
+  const diff = Math.round((t - x) / 864e5);
+  if (diff === 0) return "Сегодня"; if (diff === 1) return "Вчера";
+  return x.toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: x.getFullYear() === t.getFullYear() ? undefined : "numeric" });
+}
+
+function renderHistory() {
+  const list = history.filter(e => histFilter === "all" || e.type === histFilter).slice().sort((a, b) => b.at.localeCompare(a.at));
+  const box = $("histList");
+  if (!list.length) {
+    box.innerHTML = `<div class="group"><div class="empty">${history.length ? "Нет записей с таким фильтром" : "История пока пуста. Здесь появится каждая полная проверка сети и проверка сайтов."}</div></div>`;
+  } else {
+    const days = [];
+    list.forEach(e => { const k = dayLabel(e.at); let g = days.find(d => d.k === k); if (!g) days.push(g = { k, items: [] }); g.items.push(e); });
+    box.innerHTML = days.map(d => `<div class="hist-day"><div class="group-label">${esc(d.k)}</div><div class="group">` +
+      d.items.map(e => {
+        const lv = entryLevel(e), t = new Date(e.at).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+        const title = e.type === "sites" ? "Сайты и приложения" : (e.full ? "Проверка сети" : "Проверка сети без скорости");
+        return `<button class="row ${lv}" data-id="${esc(e.id)}">
+          <span class="av">${e.type === "sites" ? ICONS.dns : ICONS.ping}</span>
+          <div class="row-main"><div class="row-title">${title}</div><div class="row-sub">${esc(entrySummary(e))}</div></div>
+          <span class="row-end" style="color:var(--text-3)">${t}</span>${CHEV}</button>`;
+      }).join("") + "</div></div>").join("");
+    box.querySelectorAll(".row").forEach(b => b.onclick = () => openHistory(b.dataset.id));
+    box.querySelectorAll(".av svg").forEach(s => { s.style.width = "17px"; s.style.height = "17px"; });
+  }
+  renderCharts();
+}
+
+function openHistory(id) {
+  const e = history.find(x => x.id === id); if (!e) return;
+  const when = new Date(e.at).toLocaleString("ru-RU", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" });
+  let lines;
+  if (e.type === "sites") {
+    lines = e.services.map(s => ({ l: s.level, t: `${s.name}: ${s.status}${s.ms && s.level !== "bad" ? " · " + s.ms + " мс" : ""}` }));
+    lines.push({ l: "dim", t: `Трафик шёл через «${e.via}»` });
+  } else {
+    lines = [];
+    e.steps.forEach(s => {
+      lines.push({ l: s.level === "info" ? "info" : s.level, t: `${s.title}: ${s.metric || LEVEL_TXT[s.level]}` });
+      s.lines.filter(l => l.l === "bad" || l.l === "warn").forEach(l => lines.push({ l: "dim", t: "— " + l.t }));
+    });
+  }
+  showSheet({
+    title: e.type === "sites" ? "Сайты и приложения" : "Проверка сети", sub: when + " · " + entrySummary(e),
+    icon: e.type === "sites" ? ICONS.dns : ICONS.ping, level: entryLevel(e), lines,
+    actions: [{ label: "Удалить запись", kind: "danger", onClick: async () => {
+      try {
+        const r = await fetch(`/api/history/delete?id=${encodeURIComponent(id)}&t=${TOKEN}`, { method: "POST" });
+        if (!r.ok) throw new Error();
+        history = history.filter(x => x.id !== id); closeSheet(); renderHistory(); toast("Запись удалена");
+      } catch (err) { toast("Не удалось удалить"); }
+    } }],
+  });
+}
+
+// линейный график одной величины во времени (одна ось, одна серия)
+function lineChart(el, pts, unit, decimals) {
+  if (pts.length < 2) { el.innerHTML = `<div class="chart-empty">Нужно хотя бы две проверки, чтобы показать изменения</div>`; return; }
+  const W = Math.max(260, el.clientWidth), H = 150, L = 34, R = 10, T = 10, B = 22;
+  const vals = pts.map(p => p.v), max = Math.max(...vals), min = Math.min(...vals);
+  const top = niceMax(max), lo = 0;
+  const x = i => L + (W - L - R) * (pts.length === 1 ? .5 : i / (pts.length - 1));
+  const y = v => T + (H - T - B) * (1 - (v - lo) / (top - lo || 1));
+  const ticks = [0, top / 2, top];
+  const d = pts.map((p, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(p.v).toFixed(1)}`).join("");
+  const area = d + `L${x(pts.length - 1).toFixed(1)},${y(0)}L${x(0).toFixed(1)},${y(0)}Z`;
+  const fmtD = (t) => new Date(t).toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
+  el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="График за ${pts.length} проверок">
+    <g class="grid">${ticks.map(t => `<line x1="${L}" x2="${W - R}" y1="${y(t)}" y2="${y(t)}"/>`).join("")}</g>
+    <g class="axis">${ticks.map(t => `<text x="${L - 6}" y="${y(t) + 4}" text-anchor="end">${fmtN(t, 0)}</text>`).join("")}
+      <text x="${L}" y="${H - 4}">${fmtD(pts[0].t)}</text><text x="${W - R}" y="${H - 4}" text-anchor="end">${fmtD(pts[pts.length - 1].t)}</text></g>
+    <path class="area" d="${area}"/><path class="line" d="${d}"/>
+    <line class="cross" id="${el.id}-x" y1="${T}" y2="${H - B}" style="display:none"/>
+    ${pts.length <= 40 ? pts.map((p, i) => `<circle class="pt" cx="${x(i)}" cy="${y(p.v)}" r="4"/>`).join("") : `<circle class="pt" cx="${x(pts.length - 1)}" cy="${y(pts[pts.length - 1].v)}" r="4"/>`}
+    <rect x="${L}" y="0" width="${W - L - R}" height="${H}" fill="transparent" id="${el.id}-hit"/></svg>
+    <div class="chart-tip" id="${el.id}-tip"></div>`;
+  const hit = $(el.id + "-hit"), tip = $(el.id + "-tip"), cross = $(el.id + "-x"), svg = el.querySelector("svg");
+  const show = (ev) => {
+    const r = svg.getBoundingClientRect(), mx = (ev.clientX - r.left) * W / r.width;
+    const i = Math.max(0, Math.min(pts.length - 1, Math.round((mx - L) / (W - L - R) * (pts.length - 1))));
+    const p = pts[i], px = x(i) * r.width / W, py = y(p.v) * r.height / H;
+    cross.setAttribute("x1", x(i)); cross.setAttribute("x2", x(i)); cross.style.display = "";
+    tip.style.display = "block"; tip.style.left = px + "px"; tip.style.top = py + "px";
+    tip.innerHTML = `<b>${fmtN(p.v, decimals)} ${unit}</b><br><span style="color:var(--text-3)">${new Date(p.t).toLocaleString("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</span>`;
+  };
+  hit.addEventListener("mousemove", show);
+  hit.addEventListener("mouseleave", () => { tip.style.display = "none"; cross.style.display = "none"; });
+}
+const fmtN = (v, dec) => Number(v).toLocaleString("ru-RU", { maximumFractionDigits: dec });
+function niceMax(v) { if (v <= 0) return 1; const p = Math.pow(10, Math.floor(Math.log10(v))); const n = v / p; return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10) * p; }
+
+function renderCharts() {
+  const ov = history.filter(e => e.type === "overview").sort((a, b) => a.at.localeCompare(b.at)).slice(-60);
+  const ping = [], down = [];
+  ov.forEach(e => {
+    const p = e.steps.find(s => s.id === "ping"), s = e.steps.find(s => s.id === "speed");
+    if (p && p.num && p.num.ping != null) ping.push({ t: e.at, v: p.num.ping });
+    if (s && s.num && s.num.down != null) down.push({ t: e.at, v: s.num.down });
+  });
+  const card = (id, title, pts, unit, dec, note) => {
+    const last = pts.length ? pts[pts.length - 1].v : null;
+    const vs = pts.map(p => p.v);
+    return `<div class="chart-card"><h4>${title}</h4>
+      <div class="chart-now display">${last == null ? "—" : fmtN(last, dec)}<small>${unit}${last == null ? "" : " · последняя"}</small></div>
+      <div class="chart-cap">${pts.length ? `мин ${fmtN(Math.min(...vs), dec)} · макс ${fmtN(Math.max(...vs), dec)} · проверок ${pts.length}` : note}</div>
+      <div class="chart-box" id="${id}"></div></div>`;
+  };
+  $("charts").innerHTML = card("chPing", "Пинг в интернет", ping, "мс", 0, "Данные появятся после проверки сети") +
+    card("chDown", "Скорость загрузки", down, "Мбит/с", 1, "Данные появятся после проверки с тестом скорости");
+  if (!$("view-history").classList.contains("on")) return;
+  lineChart($("chPing"), ping, "мс", 0);
+  lineChart($("chDown"), down, "Мбит/с", 1);
+}
+
+document.querySelectorAll("#histFilter button").forEach(b => b.onclick = () => {
+  histFilter = b.dataset.f;
+  document.querySelectorAll("#histFilter button").forEach(x => x.classList.toggle("on", x === b));
+  moveThumb($("histFilter")); renderHistory();
+});
+document.querySelector('#histFilter [data-f="all"]').classList.add("on");
+$("btnHistClear").onclick = async () => {
+  if (!history.length) return;
+  if (!confirm("Удалить всю историю проверок? Это нельзя отменить.")) return;
+  try { const r = await fetch("/api/history/clear?t=" + TOKEN, { method: "POST" }); if (!r.ok) throw new Error(); history = []; renderHistory(); toast("История очищена"); }
+  catch (e) { toast("Не удалось очистить"); }
+};
+
+// ---------- журнал ----------
+function renderLog() {
+  const rows = logFilter === "problems" ? logRows.filter(r => r.l === "bad" || r.l === "warn") : logRows;
+  const box = $("log");
+  if (!rows.length) { box.innerHTML = `<div class="empty">${logFilter === "problems" ? "Проблем не найдено" : "Записей пока нет. Запусти проверку."}</div>`; return; }
+  box.innerHTML = rows.map(r => `<div class="log-row ${r.l}"><span class="t">${r.time}</span>
+    <div><div class="m">${esc(r.t)}</div>${r.step ? `<div class="s">${esc(r.step)}</div>` : ""}</div></div>`).join("");
+}
+$("btnClear").onclick = () => { logRows = []; renderLog(); toast("Журнал очищен"); };
+
+// ---------- отчёт ----------
+function reportText() {
+  const mark = { ok: "[OK]", warn: "[!] ", bad: "[X] ", info: "    ", dim: "    " };
+  const out = ["Dimetrix — отчёт от " + new Date().toLocaleString("ru-RU"), ""];
+  for (const s of steps) {
+    const r = results[s.id]; if (!r || r === "running") continue;
+    out.push(`== ${s.title}: ${LEVEL_TXT[r.level]} — ${r.metric || ""}`);
+    r.lines.forEach(l => out.push("  " + mark[l.l] + " " + l.t)); out.push("");
+  }
+  if (sites) {
+    out.push(`== Сайты и приложения (через ${sites.via})`);
+    sites.services.forEach(s => {
+      out.push(`  ${mark[s.level]} ${s.name}: ${s.status}${s.ms ? " · ≈" + s.ms + " мс" : ""}`);
+      s.lines.filter(l => l.l === "bad" || l.l === "warn").forEach(l => out.push("         " + l.t));
+    });
+  }
+  return out.join("\r\n");
+}
+$("btnCopy").onclick = async () => { try { await navigator.clipboard.writeText(reportText()); toast("Отчёт скопирован"); } catch (e) { toast("Не удалось скопировать"); } };
+$("btnSave").onclick = () => {
+  const blob = new Blob(["﻿" + reportText()], { type: "text/plain;charset=utf-8" });
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+  a.download = "Dimetrix-" + new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-") + ".txt";
+  a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); toast("Отчёт сохранён в «Загрузки»");
+};
+
+$("btnAll").onclick = () => runSteps(steps.map(s => s.id));
+$("btnQuick").onclick = () => runSteps(steps.filter(s => !s.slow).map(s => s.id));
+$("btnSites").onclick = runSites;
+
+// держим сервер живым, пока открыта страница
+setInterval(async () => {
+  if (busy) return;
+  try { const r = await api("/api/ping"); $("offline").style.display = r.ok ? "none" : "block"; }
+  catch (e) { $("offline").style.display = "block"; }
+}, 10000);
+
+(async () => {
+  setTab(store.get("dimetrix-tab") || "overview");
+  setRing("idle", 0); renderLog();
+  try { steps = arr(await (await api("/api/steps")).json()); renderTiles(); }
+  catch (e) { $("offline").style.display = "block"; }
+  await loadHistory();
+  requestAnimationFrame(() => { moveThumb($("tabs")); moveThumb($("logFilter")); moveThumb($("histFilter")); });
+})();
+</script>
+</body>
+</html>
