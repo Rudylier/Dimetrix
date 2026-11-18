@@ -161,9 +161,25 @@ button.row:hover { background: color-mix(in srgb, var(--fill) 50%, transparent);
 .legend { display: flex; justify-content: center; gap: 18px; margin-top: 12px; color: var(--text-2); font-size: 13px; }
 .legend i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; }
 .cats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 26px 20px; align-items: start; }
-.skeleton { height: 48px; background: linear-gradient(90deg, transparent, var(--fill), transparent); background-size: 200% 100%; animation: shimmer 1.2s infinite; }
-.skeleton + .skeleton { border-top: 1px solid var(--sep); }
-@keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+.sites-empty { text-align: center; padding: 56px 0 36px; }
+.empty-ico { width: 84px; height: 84px; border-radius: 50%; margin: 0 auto 22px; display: grid; place-items: center;
+  background: radial-gradient(circle at 30% 25%, color-mix(in srgb, var(--blue) 26%, transparent), color-mix(in srgb, var(--blue) 10%, transparent)); color: var(--blue); }
+.empty-ico svg { width: 40px; height: 40px; }
+.sites-empty h1 { font-size: 36px; font-weight: 700; margin: 0 0 8px; }
+.sites-empty p { color: var(--text-2); font-size: 17px; margin: 0 auto; max-width: 520px; }
+.svc-chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; max-width: 660px; margin: 30px auto 0; }
+.svc-chips span { padding: 6px 13px; border-radius: 980px; background: var(--card); box-shadow: var(--shadow); font-size: 13px; color: var(--text-2); }
+.stale-banner { display: flex; align-items: center; gap: 12px; background: var(--orange-soft); border-radius: 14px; padding: 12px 16px; margin: 0 0 22px; font-size: 14px; }
+.stale-banner svg { width: 22px; height: 22px; flex: none; color: var(--orange); }
+.stale-banner .txt { flex: 1; }
+.stale-banner .txt b { font-weight: 600; }
+.cats { transition: opacity .3s var(--ease), filter .3s var(--ease); }
+.cats.stale { opacity: .5; filter: saturate(.4); }
+.row.wait .av { background: var(--fill); color: var(--text-3); }
+.row.wait .row-end { color: var(--text-3); gap: 8px; font-size: 14px; }
+.row.wait .spin { width: 14px; height: 14px; }
+.row.wait { animation: breathe 1.6s ease-in-out infinite; }
+@keyframes breathe { 50% { opacity: .65; } }
 
 /* ---------- журнал ---------- */
 .log-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 40px 4px 14px; flex-wrap: wrap; }
@@ -278,7 +294,7 @@ button.row:hover { background: color-mix(in srgb, var(--fill) 50%, transparent);
         <div class="glyph" id="ringGlyph"></div>
       </div>
       <h1 class="display" id="heroTitle">Проверим сеть</h1>
-      <p id="heroSub">Пинг, DNS, VPN, прокси, скорость и программы, которые нагружают интернет. Ничего не меняется в системе.</p>
+      <p id="heroSub">Пинг, DNS, VPN, прокси, скорость, программы, которые нагружают интернет, и доступность популярных сайтов. Ничего не меняется в системе.</p>
       <div class="cta">
         <button class="btn primary" id="btnAll">Проверить всё</button>
         <button class="btn secondary" id="btnQuick">Без теста скорости</button>
@@ -297,13 +313,25 @@ button.row:hover { background: color-mix(in srgb, var(--fill) 50%, transparent);
 
   <!-- Сайты -->
   <section class="view" id="view-sites">
-    <div class="sites-hero">
-      <div class="big-num display" id="sitesNum">—</div>
-      <p style="color:var(--text-2);font-size:17px;margin:10px 0 0" id="sitesSub">Проверим YouTube, Telegram, Discord, WhatsApp, соцсети, игры и другие сервисы — около 10 секунд.</p>
+    <div class="sites-empty" id="sitesEmpty">
+      <div class="empty-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.8 2.9 2.8 15.1 0 18M12 3c-2.8 2.9-2.8 15.1 0 18"/></svg></div>
+      <h1 class="display">Сайты и приложения</h1>
+      <p>Проверим популярные сервисы одновременно — около 10 секунд. Эта проверка также входит в «Проверить всё».</p>
+      <div class="cta"><button class="btn primary" id="btnSites">Проверить сайты</button></div>
+      <div class="svc-chips" id="sitesChips"></div>
+    </div>
+    <div class="sites-hero" id="sitesResult" hidden>
+      <div class="big-num display" id="sitesNum"></div>
+      <p style="color:var(--text-2);font-size:17px;margin:10px 0 0" id="sitesSub"></p>
       <div class="stack" id="sitesStack" hidden></div>
       <div class="legend" id="sitesLegend" hidden></div>
-      <div class="cta"><button class="btn primary" id="btnSites">Проверить сайты</button></div>
+      <div class="cta"><button class="btn primary" id="btnSites2">Проверить снова</button></div>
       <div class="meta" id="sitesMeta"></div>
+    </div>
+    <div class="stale-banner" id="staleBanner" hidden>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+      <div class="txt" id="staleText"></div>
+      <button class="link" id="btnStale">Обновить</button>
     </div>
     <div class="cats" id="cats"></div>
   </section>
@@ -521,22 +549,23 @@ addEventListener("keydown", (e) => { if (e.key === "Escape") closeSheet(); });
 // ---------- запуск проверок ----------
 function setBusy(v) {
   busy = v;
-  ["btnAll", "btnQuick", "btnSites"].forEach(id => $(id).disabled = v);
+  ["btnAll", "btnQuick", "btnSites", "btnSites2", "btnStale"].forEach(id => $(id).disabled = v);
   const has = Object.values(results).some(r => r && r !== "running") || !!sites;
   $("btnCopy").disabled = v || !has; $("btnSave").disabled = v || !has;
 }
 
-async function runSteps(ids) {
+async function runSteps(ids, opts = {}) {
   if (busy || !ids.length) return;
   setBusy(true); setTab("overview");
   logRows.push({ time: now(), step: "", l: "dim", t: ids.length > 1 ? "Начата проверка сети" : "Повторная проверка" });
+  const total = ids.length + (opts.withSites ? 1 : 0);
   for (let i = 0; i < ids.length; i++) {
     const s = steps.find(x => x.id === ids[i]);
     results[s.id] = "running"; renderTiles();
-    setRing("run", i / ids.length);
+    setRing("run", i / total);
     $("heroTitle").textContent = "Проверяю…";
     $("heroSub").textContent = s.title + (s.slow ? " — около 20 секунд" : "");
-    $("heroMeta").textContent = `Шаг ${i + 1} из ${ids.length}`;
+    $("heroMeta").textContent = `Шаг ${i + 1} из ${total}`;
     try {
       const res = await api("/api/run?step=" + s.id);
       if (!res.ok) throw new Error("HTTP " + res.status);
@@ -547,9 +576,16 @@ async function runSteps(ids) {
       results[s.id] = { level: "bad", metric: "Ошибка", ms: 0, at: now(), lines: [{ l: "bad", t: "Не удалось выполнить проверку: " + e.message }] };
       logRows.push({ time: now(), step: s.title, l: "bad", t: "Не удалось выполнить проверку: " + e.message });
     }
-    renderTiles(); setRing("run", (i + 1) / ids.length);
+    renderTiles(); setRing("run", (i + 1) / total);
+  }
+  if (opts.withSites) {
+    $("heroSub").textContent = "Сайты и приложения — около 10 секунд";
+    $("heroMeta").textContent = `Шаг ${total} из ${total}`;
+    await fetchSites();
+    setRing("run", 1);
   }
   lastRun = new Date().toLocaleString("ru-RU", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" });
+  if (ids.length > 1) overviewTs = Date.now();
   setBusy(false); renderHero(); renderTiles(); renderIssues(); renderLog();
   if (ids.length > 1) {
     const done = ids.map(id => ({ id, ...results[id] }));
@@ -562,16 +598,32 @@ async function runSteps(ids) {
 }
 
 // ---------- сайты ----------
+let catalog = [], overviewTs = 0;
+const groupBy = (list) => [...new Set(list.map(s => s.cat))];
+function ago(ts) {
+  const m = Math.floor((Date.now() - ts) / 60000);
+  if (m < 1) return "только что";
+  if (m < 60) return `${m} ${plural(m, "минуту", "минуты", "минут")} назад`;
+  const h = Math.floor(m / 60);
+  return `${h} ${plural(h, "час", "часа", "часов")} назад`;
+}
+
 function renderSites(loading) {
   const cats = $("cats");
+  $("sitesEmpty").hidden = !!(sites || loading);
+  $("sitesResult").hidden = !(sites || loading);
   if (loading) {
-    $("sitesNum").innerHTML = '<span class="spin" style="width:48px;height:48px;border-width:4px;margin:8px 0"></span>';
-    $("sitesSub").textContent = "Проверяю все сервисы одновременно…";
-    $("sitesStack").hidden = true; $("sitesLegend").hidden = true; $("sitesMeta").textContent = "";
-    cats.innerHTML = [4, 3, 4, 3].map((n, k) => `<div><div class="group-label">&nbsp;</div><div class="group">${'<div class="skeleton"></div>'.repeat(n)}</div></div>`).join("");
+    $("sitesNum").innerHTML = '<span class="spin" style="width:52px;height:52px;border-width:4px;margin:6px 0"></span>';
+    $("sitesSub").textContent = `Проверяю ${catalog.length || "все"} ${catalog.length ? plural(catalog.length, "сервис", "сервиса", "сервисов") : "сервисы"} одновременно…`;
+    $("sitesStack").hidden = true; $("sitesLegend").hidden = true; $("sitesMeta").textContent = "Обычно это занимает до 10 секунд";
+    $("staleBanner").hidden = true; cats.classList.remove("stale");
+    cats.innerHTML = groupBy(catalog).map(c => `<div><div class="group-label">${esc(c)}</div><div class="group">` +
+      catalog.filter(s => s.cat === c).map(s => `<div class="row wait"><span class="av">${esc(s.name.charAt(0))}</span>
+        <div class="row-main"><div class="row-title">${esc(s.name)}</div></div><span class="row-end"><span class="spin"></span>проверяю</span></div>`).join("") +
+      "</div></div>").join("");
     return;
   }
-  if (!sites) return;
+  if (!sites) { cats.innerHTML = ""; renderStale(); return; }
   const list = sites.services, n = { ok: 0, warn: 0, bad: 0 };
   list.forEach(s => n[s.level] = (n[s.level] || 0) + 1);
   $("sitesNum").innerHTML = `${n.ok}<small> из ${list.length}</small>`;
@@ -579,8 +631,7 @@ function renderSites(loading) {
   $("sitesStack").hidden = false; $("sitesLegend").hidden = false;
   $("sitesStack").innerHTML = ["ok", "warn", "bad"].map(k => `<span style="width:${n[k] / list.length * 100}%;background:${COLOR[k]}"></span>`).join("");
   $("sitesLegend").innerHTML = `<span><i style="background:var(--green)"></i>Работают ${n.ok}</span><span><i style="background:var(--orange)"></i>Частично ${n.warn}</span><span><i style="background:var(--red)"></i>Не открываются ${n.bad}</span>`;
-  $("sitesMeta").textContent = `Проверено в ${sites.at}, трафик идёт через «${sites.via}»`;
-  const groups = [...new Set(list.map(s => s.cat))];
+  const groups = groupBy(list);
   cats.innerHTML = groups.map(c => `<div><div class="group-label">${esc(c)}</div><div class="group">` +
     list.filter(s => s.cat === c).map(s => {
       const k = list.indexOf(s);
@@ -594,17 +645,34 @@ function renderSites(loading) {
     const open = b.getAttribute("aria-expanded") !== "true";
     b.setAttribute("aria-expanded", open); $("exp-" + b.dataset.k).classList.toggle("on", open);
   });
+  renderStale();
 }
 
-async function runSites() {
-  if (busy) return;
-  setBusy(true); setTab("sites"); renderSites(true);
+// Явно показываем, что результаты сайтов устарели
+function renderStale() {
+  const banner = $("staleBanner"), cats = $("cats");
+  if (!sites) { banner.hidden = true; cats.classList.remove("stale"); return; }
+  const age = Date.now() - sites.ts;
+  const olderThanNet = overviewTs && overviewTs > sites.ts + 2000;
+  const stale = age > 10 * 60000 || olderThanNet;
+  $("sitesMeta").textContent = `Проверено ${ago(sites.ts)}, в ${sites.at} · трафик шёл через «${sites.via}»`;
+  banner.hidden = !stale; cats.classList.toggle("stale", stale);
+  if (stale) {
+    $("staleText").innerHTML = olderThanNet
+      ? `<b>Это старые результаты</b> — от ${esc(sites.at)}. Сеть с тех пор проверялась заново, а сайты нет.`
+      : `<b>Результаты устарели</b> — проверка была ${esc(ago(sites.ts))}. С тех пор ситуация могла измениться.`;
+  }
+}
+
+// Сетевая часть проверки сайтов (без переключения вкладок и блокировки кнопок)
+async function fetchSites() {
+  renderSites(true);
   try {
     const res = await api("/api/services");
     if (!res.ok) throw new Error("HTTP " + res.status);
     const r = await res.json();
     r.services = arr(r.services).map(s => ({ ...s, lines: arr(s.lines) }));
-    r.at = now(); sites = r;
+    r.at = now(); r.ts = Date.now(); sites = r;
     logRows.push({ time: now(), step: "", l: "dim", t: "Проверка сайтов и приложений" });
     r.services.forEach(s => logRows.push({ time: r.at, step: "Сайты", l: s.level, t: `${s.name}: ${s.status}` }));
     saveHistory({
@@ -613,11 +681,20 @@ async function runSites() {
       services: r.services.map(s => ({ name: s.name, cat: s.cat, level: s.level, status: s.status, ms: s.ms, lines: s.lines })),
     });
   } catch (e) {
-    $("sitesNum").textContent = "—";
-    $("sitesSub").textContent = "Не удалось проверить сайты: " + e.message;
-    $("cats").innerHTML = "";
+    logRows.push({ time: now(), step: "Сайты", l: "bad", t: "Не удалось проверить сайты: " + e.message });
+    renderSites(false);
+    if (!sites) { $("sitesEmpty").hidden = false; $("sitesResult").hidden = true; }
+    toast("Не удалось проверить сайты");
+    return;
   }
-  setBusy(false); renderSites(false); renderIssues(); renderLog();
+  renderSites(false);
+}
+
+async function runSites() {
+  if (busy) return;
+  setBusy(true); setTab("sites");
+  await fetchSites();
+  setBusy(false); renderIssues(); renderLog();
 }
 
 // ---------- история ----------
@@ -819,9 +896,12 @@ $("btnSave").onclick = () => {
   a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); toast("Отчёт сохранён в «Загрузки»");
 };
 
-$("btnAll").onclick = () => runSteps(steps.map(s => s.id));
-$("btnQuick").onclick = () => runSteps(steps.filter(s => !s.slow).map(s => s.id));
+$("btnAll").onclick = () => runSteps(steps.map(s => s.id), { withSites: true });
+$("btnQuick").onclick = () => runSteps(steps.filter(s => !s.slow).map(s => s.id), { withSites: true });
 $("btnSites").onclick = runSites;
+$("btnSites2").onclick = runSites;
+$("btnStale").onclick = runSites;
+setInterval(() => { if (!busy) renderStale(); }, 30000);
 
 // держим сервер живым, пока открыта страница
 setInterval(async () => {
@@ -835,6 +915,9 @@ setInterval(async () => {
   setRing("idle", 0); renderLog();
   try { steps = arr(await (await api("/api/steps")).json()); renderTiles(); }
   catch (e) { $("offline").style.display = "block"; }
+  try { catalog = arr(await (await api("/api/services/catalog")).json()); } catch (e) { catalog = []; }
+  $("sitesChips").innerHTML = catalog.map(s => `<span>${esc(s.name)}</span>`).join("");
+  renderSites(false);
   await loadHistory();
   requestAnimationFrame(() => { moveThumb($("tabs")); moveThumb($("logFilter")); moveThumb($("histFilter")); });
 })();

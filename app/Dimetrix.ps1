@@ -73,20 +73,21 @@ function Check-Proxy {
     $is = Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings' -ErrorAction SilentlyContinue
     $script:Metric = 'Не используется'
     if ($is.ProxyEnable -eq 1 -and $is.ProxyServer) {
-        Warn ("Включён системный прокси: {0}" -f $is.ProxyServer); $script:Metric = "Прокси $($is.ProxyServer)"
+        Info ("Включён системный прокси: {0}. Его часто ставят VPN-программы (например, Happ в режиме «Системный прокси»)." -f $is.ProxyServer)
+        $script:Metric = "Прокси $($is.ProxyServer)"
     }
     if ($is.AutoConfigURL) {
         $u = $is.AutoConfigURL; $hostPart = $u
         try { $hostPart = ([Uri]$u).Host } catch {}
         $script:Metric = "PAC: $hostPart"
-        Warn ("Задан сценарий прокси (PAC) с узла {0}. Если он от чужой или старой работы, сайты могут открываться медленно." -f $hostPart)
+        Info ("Используется сценарий прокси (PAC) с узла {0}. Обычно его настраивает рабочая сеть или VPN — это нормально." -f $hostPart)
         try {
             $sw = [Diagnostics.Stopwatch]::StartNew()
             $r = [Net.WebRequest]::Create($u); $r.Timeout = 4000; $r.Proxy = $null
             $resp = $r.GetResponse(); $resp.Close()
-            Dim ("PAC отвечает за {0} мс" -f $sw.ElapsedMilliseconds)
+            Ok ("Сценарий прокси отвечает за {0} мс" -f $sw.ElapsedMilliseconds)
         } catch {
-            Bad "PAC-сценарий недоступен: браузер может тормозить на каждом новом сайте. Отключить: Параметры → Сеть и Интернет → Прокси → «Использовать сценарий настройки»."
+            Dim "Сценарий прокси сейчас не отвечает. Если сайты и рабочие сервисы открываются нормально, на это можно не обращать внимания."
         }
     }
     if ($script:Metric -eq 'Не используется') { Ok "Системный прокси не используется" }
@@ -601,6 +602,10 @@ try {
                     $ctx.Response.OutputStream.Write($bytes, 0, $bytes.Length); $ctx.Response.Close()
                 }
                 '/api/services' { Send $ctx 200 'application/json; charset=utf-8' ((Check-Popular) | ConvertTo-Json -Depth 5 -Compress) }
+                '/api/services/catalog' {
+                    $cat = foreach ($s in $Services) { [pscustomobject]@{ name = $s.name; cat = $s.cat } }
+                    Send $ctx 200 'application/json; charset=utf-8' (ConvertTo-Json @($cat) -Compress)
+                }
                 '/api/history' {
                     if ($ctx.Request.HttpMethod -eq 'POST') {
                         $body = Read-Body $ctx
