@@ -75,6 +75,9 @@ svg { display: block; }
 .icon-btn svg { width: 18px; height: 18px; }
 
 main { max-width: 980px; margin: 0 auto; padding: 0 20px 64px; }
+.app-footer { padding: 0 20px 24px; text-align: center; font-size: 13px; color: var(--text-2); }
+.app-footer a { color: inherit; text-underline-offset: 3px; }
+.app-footer a:hover { color: var(--blue); }
 .view { display: none; animation: fade .35s var(--ease); }
 .view.on { display: block; }
 @keyframes fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
@@ -101,7 +104,7 @@ main { max-width: 980px; margin: 0 auto; padding: 0 20px 64px; }
 
 .speed-card {
   position: relative; overflow: hidden;
-  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 20px;
+  display: grid; grid-template-columns: minmax(0, 1fr) 156px; align-items: center; gap: 20px;
   padding: 22px; border-radius: var(--radius); box-shadow: var(--shadow);
   background: color-mix(in srgb, var(--blue) 7%, var(--card));
   border: 1px solid color-mix(in srgb, var(--blue) 28%, var(--sep));
@@ -112,9 +115,9 @@ main { max-width: 980px; margin: 0 auto; padding: 0 20px 64px; }
   transform: scaleX(0); transform-origin: left; transition: transform .4s var(--ease);
 }
 .speed-card h2 { font-size: 22px; margin: 0 0 6px; }
-.speed-card p { color: var(--text-2); margin: 0 0 14px; }
+.speed-card p { color: var(--text-2); margin: 0 0 14px; overflow-wrap: anywhere; }
 .speed-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-.speed-gauge { width: 156px; text-align: center; flex: none; }
+.speed-gauge { width: 156px; text-align: center; justify-self: center; }
 .speed-gauge svg { width: 100%; }
 .speed-track { stroke: var(--fill); }
 .speed-fill { stroke: var(--blue); }
@@ -123,6 +126,9 @@ main { max-width: 980px; margin: 0 auto; padding: 0 20px 64px; }
 .speed-readout { min-height: 28px; }
 .speed-unit, .speed-scale { color: var(--text-2); font-size: 12px; }
 .speed-scale { display: flex; justify-content: space-between; padding: 0 13px; }
+@media (max-width: 480px) {
+  .speed-card { grid-template-columns: minmax(0, 1fr); }
+}
 @media (prefers-reduced-motion: reduce) {
   .speed-progress span { transition: none; }
 }
@@ -470,6 +476,7 @@ button.row:hover { background: color-mix(in srgb, var(--fill) 50%, transparent);
     <div class="group" id="log"></div>
   </section>
 </main>
+<footer class="app-footer">created by <a href="https://t.me/KlimSheremetev" target="_blank" rel="noopener noreferrer">ksheremetev</a></footer>
 
 <div class="sheet-back" id="sheetBack" aria-hidden="true">
   <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
@@ -611,33 +618,38 @@ function detailLine(line) {
   return `<li class="${esc(line.l)}"><div>${esc(line.t)}${issueNotes(line)}</div></li>`;
 }
 
+function siteIssueSummary(services) {
+  const failed = services.filter(s => s.level === "bad");
+  const partial = services.filter(s => s.level === "warn");
+  return [
+    failed.length && `Нет ответа в проверке Dimetrix: ${failed.map(s => s.name).join(", ")}.`,
+    partial.length && `Частичный или медленный ответ: ${partial.map(s => s.name).join(", ")}.`,
+  ].filter(Boolean).join(" ");
+}
+
 function renderIssues() {
   const items = [];
   for (const s of steps) {
     const r = results[s.id]; if (!r || r === "running") continue;
     r.lines.filter(l => l.l === "bad" || l.l === "warn").forEach(l => items.push({ ...l, lv: l.l, sub: s.title, id: s.id }));
   }
-  sites?.services.forEach((s, siteIndex) => {
-    if (s.level === "ok") return;
-    const failed = s.lines.filter(l => l.l === "bad");
-    const slow = s.lines.filter(l => l.l === "warn");
-    const reason = failed.length ? "Доступ к некоторым компонентам проверить не удалось. " + failed.map(l => l.t).join(" · ") :
-      slow.length ? "Ответ дольше 2,5 секунды. Сервис может загружаться с задержкой." : "";
-    items.push({ lv: s.level, t: `${s.name} · ${s.status}`, sub: "Сайты и приложения", reason, siteIndex });
-  });
   items.sort((a, b) => (a.lv === "bad" ? 0 : 1) - (b.lv === "bad" ? 0 : 1));
+  if (sites) {
+    const reason = siteIssueSummary(sites.services);
+    if (reason) {
+      const ok = sites.services.filter(s => s.level === "ok").length;
+      items.unshift({ lv: sites.services.some(s => s.level === "bad") ? "bad" : "warn",
+        t: `Сайты и приложения · ${ok} из ${sites.services.length} в норме`, reason, tab: "sites" });
+    }
+  }
   $("issuesWrap").hidden = !items.length;
   $("issues").innerHTML = items.map((x, i) => `
     <button class="row ${x.lv}" data-i="${i}">
       <svg class="issue-ico" viewBox="0 0 24 24" fill="${x.lv === "bad" ? "var(--red)" : "var(--orange)"}"><circle cx="12" cy="12" r="10"/><path d="M12 5.5v7.5" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/><circle cx="12" cy="17.5" r="1.4" fill="#fff"/></svg>
-      <span class="row-main"><span class="row-title">${esc(x.t)}</span><span class="row-sub">${esc(x.sub)}</span>${issueNotes(x)}</span>${CHEV}</button>`).join("");
+      <span class="row-main"><span class="row-title">${esc(x.t)}</span>${x.sub ? `<span class="row-sub">${esc(x.sub)}</span>` : ""}${issueNotes(x)}</span>${CHEV}</button>`).join("");
   $("issues").querySelectorAll(".row").forEach(b => b.onclick = () => {
     const x = items[+b.dataset.i];
-    if (x.siteIndex == null) { openSheet(x.id); return; }
-    setTab("sites");
-    const row = $("cats").querySelector(`[data-k="${x.siteIndex}"]`);
-    if (row?.getAttribute("aria-expanded") === "false") row.click();
-    row?.scrollIntoView({ block: "nearest" });
+    if (x.tab) setTab(x.tab); else openSheet(x.id);
   });
 }
 
@@ -889,9 +901,64 @@ function setBusy(v) {
   $("btnCopy").disabled = v || !has; $("btnSave").disabled = v || !has;
 }
 
+const repeatWindows = { speed: 60_000, sites: 15_000 };
+const lastAttempt = { speed: 0, sites: 0 };
+let cloudflareRetryAt = 0, lastSpeedResult = null, lastSiteResult = null;
+
+function repeatDeadline(check) {
+  return Math.max(lastAttempt[check] + repeatWindows[check], check === "speed" ? cloudflareRetryAt : 0);
+}
+
+function confirmRepeat(checks, repeat, reuse) {
+  const time = Date.now();
+  const lines = [];
+  for (const check of checks) {
+    const waitUntil = repeatDeadline(check);
+    if (waitUntil <= time) continue;
+    const label = check === "speed" ? "Тест скорости" : "Сайты и приложения";
+    const seconds = Math.ceil((waitUntil - time) / 1000);
+    lines.push({ l: "info", t: `${label} · рекомендуем подождать ${seconds} сек.` });
+    if (check === "speed" && cloudflareRetryAt > time) {
+      lines.push({ l: "warn", t: `Cloudflare рекомендует повторить после ${new Date(cloudflareRetryAt).toLocaleString("ru-RU")}.` });
+    }
+    const last = check === "speed" ? lastSpeedResult : lastSiteResult;
+    if (last) lines.push({ l: "dim", t: `Последний результат в ${last.at} · ${check === "speed" ? last.metric : serviceSummary(last.counts)}` });
+  }
+  if (!lines.length) return false;
+  const actions = [];
+  if (reuse) actions.push({ label: reuse.label, kind: "primary", onClick: () => { closeSheet(); reuse.run(); } });
+  actions.push({ label: reuse ? "Повторить с новыми замерами" : "Всё равно повторить",
+    kind: reuse ? "secondary" : "primary", onClick: () => { closeSheet(); repeat(); } });
+  showSheet({ title: "Недавно проверяли", icon: ICONS.speed, level: "info", lines, actions });
+  return true;
+}
+
 async function runSteps(ids, opts = {}) {
-  if (busy || !ids.length) return;
+  if (busy || (!ids.length && !opts.withSites)) return;
+  if (!opts.repeat) {
+    const checks = [];
+    if (ids.includes("speed") && !opts.reuseSpeed) checks.push("speed");
+    if (opts.withSites && !opts.reuseSites) checks.push("sites");
+    const time = Date.now();
+    const reuseSpeed = checks.includes("speed") && repeatDeadline("speed") > time;
+    const reuseSites = checks.includes("sites") && lastSiteResult && repeatDeadline("sites") > time;
+    const reuse = opts.withSites && (reuseSpeed || reuseSites) ? {
+      label: reuseSpeed && !reuseSites
+        ? (lastSpeedResult ? "Использовать последний замер скорости" : "Продолжить без теста скорости")
+        : reuseSpeed ? "Использовать последние результаты" : "Использовать последнюю проверку сайтов",
+      run: () => runSteps(reuseSpeed ? ids.filter(id => id !== "speed") : ids,
+        { ...opts, repeat: true, reuseSpeed, reuseSites: !!reuseSites }),
+    } : null;
+    if (confirmRepeat(checks, () => runSteps(ids, { ...opts, repeat: true }), reuse)) return;
+  }
   setBusy(true); setTab("overview");
+  if (opts.withSites && ids.includes("speed")) $("btnSpeed").textContent = "Ожидание…";
+  if (opts.reuseSpeed && lastSpeedResult) {
+    results.speed = lastSpeedResult;
+    showDownload(lastSpeedResult.num.down);
+    $("speedStatus").textContent = `Последний замер в ${lastSpeedResult.at} · ${lastSpeedResult.metric}`;
+    renderTiles();
+  }
   logRows.push({ time: now(), step: "", l: "dim", t: ids.length > 1 ? "Начата проверка сети" : "Повторная проверка" });
   const total = ids.length + (opts.withSites ? 1 : 0);
   const network = await readNetworkContext();
@@ -905,18 +972,25 @@ async function runSteps(ids, opts = {}) {
     try {
       let r;
       if (s.id === "speed") {
+        $("btnSpeed").textContent = "Измеряю…";
         r = await runSpeed();
+        if (r.num?.retryAt != null) cloudflareRetryAt = Math.max(cloudflareRetryAt, r.num.retryAt);
         showSpeedProgress(null);
         showDownload(r.num?.down);
         const upload = r.num?.up == null ? "Отдачу измерить не удалось" : `Отдача · ${speedFormat.format(r.num.up)} Мбит/с`;
-        $("speedStatus").textContent = r.num?.down == null ? "Загрузку измерить не удалось. " + upload : "Замер завершён. " + upload;
-        $("btnSpeed").textContent = "Измерить ещё раз";
+        $("speedStatus").textContent = r.num?.down == null
+          ? (r.num?.up == null ? "Скорость измерить не удалось" : "Загрузку измерить не удалось. " + upload)
+          : "Замер завершён. " + upload;
+        if (r.num?.retryAt > Date.now()) {
+          $("speedStatus").textContent += `. Cloudflare рекомендует повторить после ${new Date(r.num.retryAt).toLocaleString("ru-RU")}.`;
+        }
       } else {
         const res = await api("/api/run?step=" + s.id);
         if (!res.ok) throw new Error("HTTP " + res.status);
         r = await res.json();
       }
       r.lines = arr(r.lines); r.at = now(); results[s.id] = r;
+      if (s.id === "speed" && (r.num?.down != null || r.num?.up != null)) lastSpeedResult = r;
       r.lines.forEach(l => logRows.push({ time: r.at, step: s.title, l: l.l, t: l.t }));
     } catch (e) {
       let message = e.message;
@@ -931,22 +1005,28 @@ async function runSteps(ids, opts = {}) {
       results[s.id] = { level: "bad", metric: "Ошибка", ms: 0, at: now(), lines: [line] };
       logRows.push({ time: now(), step: s.title, ...line });
     }
-    if (s.id === "speed") $("speedDetails").hidden = false;
+    if (s.id === "speed") {
+      lastAttempt.speed = Date.now();
+      $("btnSpeed").textContent = "Измерить ещё раз";
+      $("speedDetails").hidden = false;
+    }
     renderTiles(); setRing("run", (i + 1) / total);
   }
   let siteResult;
-  if (opts.withSites) {
+  if (opts.withSites && !opts.reuseSites) {
     $("heroSub").textContent = "Сайты и приложения — около 10 секунд";
     $("heroMeta").textContent = `Шаг ${total} из ${total}`;
     siteResult = await fetchSites();
     setRing("run", 1);
   }
+  if (opts.reuseSites) siteResult = { ...lastSiteResult, reused: true };
   lastRun = new Date().toLocaleString("ru-RU", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" });
   if (ids.length > 1) overviewTs = Date.now();
   const done = ids.map(id => ({ ...results[id], id, title: steps.find(s => s.id === id).title }));
   await saveHistory({
-    type: "overview", full: ids.length === steps.length, single: ids.length === 1 ? ids[0] : null,
+    type: "overview", mode: opts.mode || "single", single: ids.length === 1 ? ids[0] : null,
     network, siteCheck: opts.withSites ? (siteResult || null) : undefined,
+    reusedSpeed: opts.reuseSpeed ? (lastSpeedResult && { at: lastSpeedResult.at, metric: lastSpeedResult.metric }) : undefined,
     counts: { bad: done.filter(r => r.level === "bad").length, warn: done.filter(r => r.level === "warn").length },
     steps: done.map(({ id, title, level, metric, num, lines }) => ({ id, title, level, metric, num, lines })),
   });
@@ -983,7 +1063,9 @@ function renderSites(loading) {
   const list = sites.services, n = { ok: 0, warn: 0, bad: 0 };
   list.forEach(s => n[s.level] = (n[s.level] || 0) + 1);
   $("sitesNum").innerHTML = `${n.ok}<small> из ${list.length}</small>`;
-  $("sitesSub").textContent = n.bad ? `Прямой замер не прошёл: ${list.filter(s => s.level === "bad").map(s => s.name).join(", ")}. Браузер может подключаться иначе.` : n.warn ? "Часть адресов ответила медленно или не ответила" : "Все проверенные адреса ответили";
+  $("sitesSub").textContent = (n.bad || n.warn)
+    ? siteIssueSummary(list) + (n.bad ? " Браузер может подключаться иначе." : "")
+    : "Все проверенные адреса ответили";
   $("sitesStack").hidden = false; $("sitesLegend").hidden = false;
   $("sitesStack").innerHTML = ["ok", "warn", "bad"].map(k => `<span style="width:${n[k] / list.length * 100}%;background:${COLOR[k]}"></span>`).join("");
   $("sitesLegend").innerHTML = `<span><i style="background:var(--green)"></i>Ответили ${n.ok}</span><span><i style="background:var(--orange)"></i>Частично или медленно ${n.warn}</span><span><i style="background:var(--red)"></i>Замер не прошёл ${n.bad}</span>`;
@@ -1011,7 +1093,7 @@ function renderStale() {
   const age = Date.now() - sites.ts;
   const olderThanNet = overviewTs && overviewTs > sites.ts + 2000;
   const stale = age > 10 * 60000 || olderThanNet;
-  $("sitesMeta").textContent = `Проверено ${ago(sites.ts)}, в ${sites.at} · трафик шёл через «${sites.via}»`;
+  $("sitesMeta").textContent = `Проверено ${ago(sites.ts)}, в ${sites.at} · HTTPS с системными настройками прокси, TCP напрямую`;
   banner.hidden = !stale; cats.classList.toggle("stale", stale);
   if (stale) {
     $("staleText").innerHTML = olderThanNet
@@ -1032,22 +1114,27 @@ async function fetchSites() {
     logRows.push({ time: now(), step: "", l: "dim", t: "Проверка сайтов и приложений" });
     r.services.forEach(s => logRows.push({ time: r.at, step: "Сайты", l: s.level, t: `${s.name}: ${s.status}` }));
     renderSites(false);
-    return {
+    lastSiteResult = {
+      at: r.at,
       via: r.via,
       counts: { ok: r.services.filter(s => s.level === "ok").length, warn: r.services.filter(s => s.level === "warn").length, bad: r.services.filter(s => s.level === "bad").length, total: r.services.length },
       services: r.services,
     };
+    return lastSiteResult;
   } catch (e) {
     logRows.push({ time: now(), step: "Сайты", l: "bad", t: "Не удалось проверить сайты: " + e.message });
     renderSites(false);
     if (!sites) { $("sitesEmpty").hidden = false; $("sitesResult").hidden = true; }
     toast("Не удалось проверить сайты");
     return;
+  } finally {
+    lastAttempt.sites = Date.now();
   }
 }
 
-async function runSites() {
+async function runSites(repeat = false) {
   if (busy) return;
+  if (repeat !== true && confirmRepeat(["sites"], () => runSites(true))) return;
   setBusy(true); setTab("sites");
   const network = await readNetworkContext();
   const result = await fetchSites();
@@ -1094,10 +1181,20 @@ function networkSummary(network) {
 function serviceSummary(c) {
   return `В норме ${c.ok} из ${c.total} · медленно или частично ${c.warn} · замер не прошёл ${c.bad}`;
 }
+function entryMode(e) {
+  if (e.type === "sites") return "sites";
+  if (e.mode) return e.mode;
+  if (e.single || e.steps.length === 1) return "single";
+  return e.full ? "full" : "quick";
+}
 function entryTitle(e) {
-  if (e.type === "sites") return "Сайты и приложения";
-  if (e.single) return e.single === "speed" ? "Тест скорости" : e.steps[0].title;
-  return e.full ? "Проверка сети" : "Проверка сети без скорости";
+  const mode = entryMode(e);
+  if (mode === "sites") return "Отдельная проверка сайтов и приложений";
+  if (mode === "full") return "Полная проверка";
+  if (mode === "quick") return "Проверка без теста скорости";
+  const step = e.steps[0];
+  if ((e.single || step?.id) === "speed") return "Отдельный тест скорости";
+  return step?.title ? `Отдельная проверка · ${step.title}` : "Отдельная проверка";
 }
 function entrySummary(e) {
   if (e.type === "sites") {
@@ -1111,7 +1208,9 @@ function entrySummary(e) {
   if (ping?.num?.loss != null) parts.push(`потери ${ping.num.loss}%`);
   if (sp) parts.push(sp.num?.down == null && sp.num?.up == null ? "Скорость не измерена" :
     `↓${sp.num?.down ?? "—"} ↑${sp.num?.up ?? "—"} Мбит/с`);
-  if (e.siteCheck) parts.push(serviceSummary(e.siteCheck.counts));
+  if (e.reusedSpeed) parts.push(`Прошлый замер скорости в ${e.reusedSpeed.at} · ${e.reusedSpeed.metric}`);
+  else if (e.reusedSpeed === null) parts.push("Тест скорости пропущен");
+  if (e.siteCheck) parts.push((e.siteCheck.reused ? `Прошлая проверка сайтов в ${e.siteCheck.at} · ` : "") + serviceSummary(e.siteCheck.counts));
   else if (e.siteCheck === null) parts.push("Сайты проверить не удалось");
   return parts.length ? parts.join(" · ") : "Всё в порядке";
 }
@@ -1150,7 +1249,9 @@ function openHistory(id) {
   const e = history.find(x => x.id === id); if (!e) return;
   const when = new Date(e.at).toLocaleString("ru-RU", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" });
   const lines = [{ l: "info", t: networkSummary(e.network) }];
-  const previous = history.filter(p => p.at < e.at && p.type === e.type && p.full === e.full && (p.single || null) === (e.single || null))
+  const mode = entryMode(e);
+  const previous = history.filter(p => p.at < e.at && entryMode(p) === mode &&
+    (mode !== "single" || (p.single || p.steps[0]?.id) === (e.single || e.steps[0]?.id)))
     .sort((a, b) => b.at.localeCompare(a.at))[0];
   if (previous) {
     const date = new Date(previous.at).toLocaleString("ru-RU", { dateStyle: "medium", timeStyle: "short" });
@@ -1291,8 +1392,8 @@ $("btnSave").onclick = () => {
   a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); toast("Отчёт сохранён в «Загрузки»");
 };
 
-$("btnAll").onclick = () => runSteps(steps.map(s => s.id), { withSites: true });
-$("btnQuick").onclick = () => runSteps(steps.filter(s => !s.slow).map(s => s.id), { withSites: true });
+$("btnAll").onclick = () => runSteps(steps.map(s => s.id), { withSites: true, mode: "full" });
+$("btnQuick").onclick = () => runSteps(steps.filter(s => !s.slow).map(s => s.id), { withSites: true, mode: "quick" });
 $("btnSpeed").onclick = () => runSteps(["speed"]);
 $("speedDetails").onclick = () => openSheet("speed");
 $("btnSites").onclick = runSites;

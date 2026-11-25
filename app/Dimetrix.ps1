@@ -328,27 +328,42 @@ function Test-Upload([int]$Bytes = 8000000) {
     return [math]::Round($Bytes * 8 / $sw.Elapsed.TotalSeconds / 1e6, 1)
 }
 
-function Test-RateLimit($Exception) {
+function Get-RateLimit($Exception) {
     for ($e = $Exception; $null -ne $e; $e = $e.InnerException) {
         if ($e -is [Net.WebException] -and $e.Response -is [Net.HttpWebResponse]) {
-            try { return ([int]$e.Response.StatusCode -eq 429) }
+            try {
+                if ([int]$e.Response.StatusCode -ne 429) { return }
+                $header = $e.Response.Headers['Retry-After']
+                $seconds = 0
+                if ([int]::TryParse($header, [ref]$seconds) -and $seconds -ge 0) {
+                    return @{ retryAt = [DateTimeOffset]::UtcNow.AddSeconds($seconds).ToUnixTimeMilliseconds() }
+                }
+                $date = [DateTimeOffset]::MinValue
+                if ([DateTimeOffset]::TryParse($header, [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]::AssumeUniversal, [ref]$date)) {
+                    return @{ retryAt = $date.ToUnixTimeMilliseconds() }
+                }
+                return @{ retryAt = $null }
+            }
             finally { $e.Response.Close() }
         }
     }
-    return $false
 }
 
 function Check-Speed {
     Head "Скорость интернета"
     if (-not $script:InternetIf) { Update-RouteInfo }
     if ($script:InternetIf) { Dim ("Замер через speed.cloudflare.com, трафик идёт через «{0}»" -f $script:InternetIf) }
-    $d = $null; $u = $null
+    $d = $null; $u = $null; $retryAt = $null
     try {
         $dr = Test-Download; $d = $dr[0]
         $line = "Загрузка: {0} Мбит/с (скачано {1} МБ)" -f $dr[0], $dr[1]
         if ($d -lt 5) { Bad $line } elseif ($d -lt 25) { Warn $line 'Загрузка ниже порога 25 Мбит/с. Скачивание файлов и видео высокого качества может идти медленнее.' 'Приостанови другие загрузки и повтори замер по кабелю или ближе к роутеру.' } else { Ok $line }
     } catch {
-        if (Test-RateLimit $_.Exception) { Warn 'Cloudflare временно ограничил замер загрузки (HTTP 429).' 'Сервер отклонил запрос из-за лимита. Скорость загрузки неизвестна.' 'Подожди несколько минут перед повторным замером.' }
+        $limit = Get-RateLimit $_.Exception
+        if ($limit) {
+            $retryAt = $limit.retryAt
+            Warn 'Cloudflare временно ограничил замер загрузки (HTTP 429).' 'Сервер отклонил запрос из-за лимита. Скорость загрузки неизвестна.' 'Подожди перед повторным замером.'
+        }
         else { Bad ("Тест загрузки не удался: " + (Get-ErrText $_.Exception)) }
     }
     Publish-Speed @{ type = 'upload'; down = $d; progress = 75 }
@@ -357,14 +372,18 @@ function Check-Speed {
         $line = "Отдача: {0} Мбит/с" -f $u
         if ($u -lt 2) { Bad $line } elseif ($u -lt 10) { Warn $line 'Отдача ниже порога 10 Мбит/с. Это может замедлить отправку файлов и ухудшить качество видеосвязи.' 'Приостанови выгрузку файлов и облачную синхронизацию, затем повтори замер.' } else { Ok $line }
     } catch {
-        if (Test-RateLimit $_.Exception) { Warn 'Cloudflare временно ограничил замер отдачи (HTTP 429).' 'Сервер отклонил запрос из-за лимита. Скорость отдачи неизвестна.' 'Подожди несколько минут перед повторным замером.' }
+        $limit = Get-RateLimit $_.Exception
+        if ($limit) {
+            if ($limit.retryAt -gt $retryAt) { $retryAt = $limit.retryAt }
+            Warn 'Cloudflare временно ограничил замер отдачи (HTTP 429).' 'Сервер отклонил запрос из-за лимита. Скорость отдачи неизвестна.' 'Подожди перед повторным замером.'
+        }
         else { Warn ("Тест отдачи не удался: " + (Get-ErrText $_.Exception)) 'Передачу данных не удалось завершить, поэтому скорость отдачи неизвестна.' 'Повтори замер. Если ошибка повторится и включён VPN, сравни результат без него.' }
     }
     if ($script:SplitRoutes.Count -gt 0) { Dim "Сейчас замер показывает скорость через VPN. Чтобы узнать скорость тарифа, выключи VPN и повтори." }
     $ds = '—'; if ($d -ne $null) { $ds = $d }
     $us = '—'; if ($u -ne $null) { $us = $u }
     $script:Metric = "↓$ds ↑$us Мбит/с"
-    $script:Num = @{ down = $d; up = $u }
+    $script:Num = @{ down = $d; up = $u; retryAt = $retryAt }
 }
 
 # ---------- Сервисы: YouTube, Telegram, Discord ----------
@@ -404,7 +423,6 @@ function Get-ErrText($ex) {
 # Endpoints: @{ name; url } для HTTPS или @{ name; tcp = 'host:port' }. Все проверки идут параллельно.
 function Test-Endpoints($List, [int]$TimeoutSec = 8) {
     $handler = New-Object Net.Http.HttpClientHandler
-    $handler.UseProxy = $false
     $handler.AllowAutoRedirect = $false
     $client = New-Object Net.Http.HttpClient($handler)
     $client.Timeout = [TimeSpan]::FromSeconds($TimeoutSec)
@@ -447,12 +465,12 @@ function Test-Endpoints($List, [int]$TimeoutSec = 8) {
     return $jobs
 }
 
-# Каталог популярных сервисов. Первый адрес у каждого — главный для проверки соединения.
+# Каталог популярных сервисов и адресов для проверки соединения.
 $Services = @(
-    @{ name = 'YouTube';    cat = 'Видео';       note = 'Если сайт открывается, а видеосерверы нет — видео будет тормозить.'; eps = @(
-        @{ name = 'Сайт youtube.com';           url = 'https://www.youtube.com/generate_204' },
+    @{ name = 'YouTube';    cat = 'Видео';       note = 'Проверяются ответы веб-страницы и вспомогательных адресов. Воспроизведение проверяй в браузере.'; eps = @(
+        @{ name = 'Главная страница YouTube';   url = 'https://www.youtube.com/' },
         @{ name = 'Картинки и превью (ytimg)';  url = 'https://i.ytimg.com/generate_204' },
-        @{ name = 'Видеосерверы (googlevideo)'; url = 'https://redirector.googlevideo.com/report_mapping' }) }
+        @{ name = 'Маршрутизация видео (googlevideo)'; url = 'https://redirector.googlevideo.com/report_mapping' }) }
     @{ name = 'Twitch';     cat = 'Видео';       eps = @( @{ name = 'Сайт twitch.tv'; url = 'https://www.twitch.tv/' } ) }
     @{ name = 'TikTok';     cat = 'Видео';       eps = @( @{ name = 'Сайт tiktok.com'; url = 'https://www.tiktok.com/' } ) }
     @{ name = 'Telegram';   cat = 'Мессенджеры'; note = 'Если серверы DC недоступны, приложение висит на «Соединение…» без прокси или VPN.'; eps = @(
@@ -495,13 +513,13 @@ $Services = @(
 
 function Check-Popular {
     if (-not $script:InternetIf) { Update-RouteInfo }
-    $flat = foreach ($s in $Services) { $i = 0; foreach ($e in $s.eps) { @{ svc = $s.name; main = ($i -eq 0); name = $e.name; url = $e.url; tcp = $e.tcp }; $i++ } }
+    $flat = foreach ($s in $Services) { foreach ($e in $s.eps) { @{ svc = $s.name; name = $e.name; url = $e.url; tcp = $e.tcp } } }
     $sw = [Diagnostics.Stopwatch]::StartNew()
     $res = Test-Endpoints @($flat)
     $out = foreach ($s in $Services) {
         $mine = @($res | Where-Object { $_.ep.svc -eq $s.name })
         $lines = New-Object System.Collections.ArrayList
-        $okCount = 0; $mainOk = $true; $slow = $false; $times = @()
+        $okCount = 0; $slow = $false; $times = @()
         foreach ($r in $mine) {
             if ($r.ok) {
                 $okCount++; $times += $r.ms
@@ -510,17 +528,16 @@ function Check-Popular {
                 if ($r.ms -gt 2500) { [void]$lines.Add([pscustomobject]@{ l = 'warn'; t = $t; reason = 'Ответ занял больше 2,5 секунды. Из-за этого часть сервиса может загружаться с задержкой.' }); $slow = $true }
                 else { [void]$lines.Add([pscustomobject]@{ l = 'ok'; t = $t }) }
             } else {
-                if ($r.ep.main) { $mainOk = $false }
                 [void]$lines.Add([pscustomobject]@{ l = 'bad'; t = ("{0}: {1}" -f $r.ep.name, $r.err) })
             }
         }
         if ($s.note) { [void]$lines.Add([pscustomobject]@{ l = 'dim'; t = $s.note }) }
         $avg = $null; if ($times.Count) { $avg = [math]::Round(($times | Measure-Object -Average).Average) }
         $total = $mine.Count
-        if (-not $mainOk -or $okCount -eq 0) { $lv = 'bad'; $st = 'Прямой замер не прошёл' }
+        if ($okCount -eq 0) { $lv = 'bad'; $st = 'Нет ответа в проверке' }
         elseif ($okCount -lt $total) { $lv = 'warn'; $st = "Частично ($okCount из $total)" }
         elseif ($slow) { $lv = 'warn'; $st = 'Медленно' }
-        else { $lv = 'ok'; $st = 'Работает' }
+        else { $lv = 'ok'; $st = 'Адреса ответили' }
         [pscustomobject]@{ name = $s.name; cat = $s.cat; level = $lv; status = $st; ms = $avg; lines = @($lines) }
     }
     $via = 'напрямую'; if ($script:InternetIf) { $via = $script:InternetIf }
