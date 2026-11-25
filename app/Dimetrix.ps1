@@ -10,8 +10,14 @@ $script:Metric = ''
 $script:Web    = -not $Console
 
 # ---------- вывод ----------
-function Emit([string]$Level, [string]$Text) {
-    if ($script:Web) { [void]$script:Lines.Add([pscustomobject]@{ l = $Level; t = $Text }); return }
+function Emit([string]$Level, [string]$Text, [string]$Reason, [string]$Fix) {
+    if ($script:Web) {
+        $line = @{ l = $Level; t = $Text }
+        if ($Reason) { $line.reason = $Reason }
+        if ($Fix) { $line.fix = $Fix }
+        [void]$script:Lines.Add([pscustomobject]$line)
+        return
+    }
     switch ($Level) {
         'head' { Write-Host ""; Write-Host ("== " + $Text + " ==") -ForegroundColor Cyan }
         'ok'   { Write-Host ("  [OK]  " + $Text) -ForegroundColor Green }
@@ -20,12 +26,14 @@ function Emit([string]$Level, [string]$Text) {
         'dim'  { Write-Host ("        " + $Text) -ForegroundColor DarkGray }
         default { Write-Host ("        " + $Text) }
     }
+    if ($Reason) { Write-Host ("        " + $Reason) }
+    if ($Fix) { Write-Host ("        " + $Fix) }
 }
 function Head([string]$t) { Emit 'head' $t }
 function Ok([string]$t)   { Emit 'ok' $t }
 function Info([string]$t) { Emit 'info' $t }
 function Dim([string]$t)  { Emit 'dim' $t }
-function Warn([string]$t) { Emit 'warn' $t }
+function Warn([string]$t, [string]$reason, [string]$fix) { Emit 'warn' $t $reason $fix }
 function Bad([string]$t)  { Emit 'bad' $t }
 
 $VpnPattern = 'vpn|proxy|outline|happ|zapret|winws|warp|tgws|v2ray|xray|clash|sing-box|singbox|nekoray|nekobox|hiddify|amnezia|wireguard|wg-|tun2socks|shadowsocks|ss-local|psiphon|tor\.exe|lantern|windscribe|proton|planet|vanya|anyconnect|forti|netzone'
@@ -44,6 +52,21 @@ function Update-RouteInfo {
     if ($probe) { $script:InternetIf = $probe.InterfaceAlias }
 }
 
+function Get-NetworkContext {
+    Update-RouteInfo
+    $adapter = $null
+    if ($script:InternetIf) {
+        $adapter = Get-NetAdapter -ErrorAction SilentlyContinue | Where-Object Name -eq $script:InternetIf | Select-Object -First 1
+    }
+    $proxy = Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings' -ErrorAction SilentlyContinue
+    $vpn = $null
+    if ($script:InternetIf) {
+        $vpn = ($script:InternetIf -in $script:SplitRoutes.InterfaceAlias) -or
+            (("$($script:InternetIf) $($adapter.InterfaceDescription)") -match $VpnAdapterPattern)
+    }
+    return @{ vpn = $vpn; adapter = $script:InternetIf; proxy = [bool]((($proxy.ProxyEnable -eq 1) -and $proxy.ProxyServer) -or $proxy.AutoConfigURL) }
+}
+
 function Check-Connection {
     Head "Подключение и VPN"
     $up = @(Get-NetAdapter -ErrorAction SilentlyContinue | Where-Object Status -eq 'Up')
@@ -57,7 +80,7 @@ function Check-Connection {
     Update-RouteInfo
     if ($script:SplitRoutes.Count -gt 0) {
         $via = $script:SplitRoutes[0].InterfaceAlias
-        Warn ("Весь интернет идёт через VPN-адаптер «{0}». Пинг и скорость зависят от VPN-сервера." -f $via)
+        Warn ("Весь интернет идёт через VPN-адаптер «{0}»." -f $via) 'Маршрут через VPN может увеличить задержку и снизить скорость. При включённом VPN это ожидаемо.' 'Если интернет тормозит, сравни результаты без VPN или через другой VPN-сервер.'
         if (Get-Process openvpn -ErrorAction SilentlyContinue) { Dim "Запущен OpenVPN: если в его конфиге есть redirect-gateway, через него идёт весь трафик." }
         $script:Metric = "Через VPN: $via"
     } elseif ($script:InternetIf) {
@@ -115,6 +138,12 @@ function Measure-Ping([string]$Target, [int]$Count = 15) {
     return [pscustomobject]$res
 }
 
+function Format-PingMs($Value) {
+    if ($null -eq $Value) { return 'нет ответа' }
+    if ($Value -eq 0) { return '<1 мс' }
+    return "$Value мс"
+}
+
 function Check-Ping {
     Head "Задержка и потери"
     if (-not $script:Gateway) { Update-RouteInfo }
@@ -129,30 +158,38 @@ function Check-Ping {
         $lossPct = [math]::Round(100 * $r.Lost / $r.Sent)
         $isRouter = ($t[0] -eq 'Роутер')
         if ($r.Avg -eq $null) {
-            Bad ("{0} ({1}): нет ответа" -f $t[0], $t[1])
+            $fix = if ($isRouter) { 'Проверь Wi-Fi или кабель и повтори замер. Некоторые роутеры не отвечают на пинг.' }
+            Emit 'bad' ("{0} ({1}): нет ответа" -f $t[0], $t[1]) '' $fix
         } else {
-            $line = "{0} ({1}): ср {2} мс, мин {3}, макс {4}, джиттер {5}, потери {6}%" -f $t[0], $t[1], $r.Avg, $r.Min, $r.Max, $r.Jitter, $lossPct
+            $line = "{0} ({1}): ср {2}, мин {3}, макс {4}, джиттер {5} мс, потери {6}%" -f $t[0], $t[1], (Format-PingMs $r.Avg), (Format-PingMs $r.Min), (Format-PingMs $r.Max), $r.Jitter, $lossPct
             $limit = 120; if ($isRouter) { $limit = 10 }
-            if ($lossPct -ge 10 -or $r.Avg -gt ($limit * 2)) { Emit 'bad' $line }
-            elseif ($lossPct -gt 0 -or $r.Avg -gt $limit -or $r.Jitter -gt 40) { Emit 'warn' $line }
+            if ($lossPct -gt 0 -or $r.Avg -gt $limit -or $r.Jitter -gt 40) {
+                $level = if ($lossPct -ge 10 -or $r.Avg -gt ($limit * 2)) { 'bad' } else { 'warn' }
+                $threshold = if ($r.Avg -gt ($limit * 2)) { $limit * 2 } else { $limit }
+                $reasons = @(
+                    if ($lossPct -gt 0) { "Потеряно $lossPct% пакетов." }
+                    if ($r.Avg -gt $limit) { "Средняя задержка выше порога $threshold мс." }
+                    if ($r.Jitter -gt 40) { 'Задержка между ответами меняется более чем на 40 мс.' }
+                )
+                $fix = if ($isRouter) { 'Повтори проверку ближе к роутеру или по кабелю.' }
+                       else { 'Приостанови загрузки и повтори проверку. Если включён VPN, сравни результаты без него.' }
+                Emit $level $line ($reasons -join ' ') $fix
+            }
             else { Emit 'ok' $line }
         }
         if ($isRouter) { $router = $r } else { $net += ,$r }
     }
-    if ($router) {
-        if ($router.Avg -eq $null -or $router.Lost -gt 1) { Bad "Потери уже до роутера: проблема в Wi-Fi или кабеле, а не у провайдера." }
-        elseif ($router.Avg -gt 10) { Warn "До роутера больше 10 мс: слабый Wi-Fi или роутер перегружен." }
-    }
     $netLoss = ($net | Measure-Object Lost -Sum).Sum
     $okNet = @($net | Where-Object { $_.Avg -ne $null })
-    $netAvg = 0; if ($okNet.Count) { $netAvg = [math]::Round(($okNet | Measure-Object Avg -Average).Average) }
+    $netAvg = $null; if ($okNet.Count) { $netAvg = [math]::Round(($okNet | Measure-Object Avg -Average).Average) }
     if ($netLoss -gt 2 -and ($router -eq $null -or $router.Lost -le 1)) {
         Bad "Потери начинаются за роутером: канал перегружен, проблема у провайдера или у VPN."
     }
-    if ($netAvg -gt 60) { Warn ("Средний пинг в интернет {0} мс. Без VPN дома обычно 5–30 мс." -f $netAvg) }
+    if ($netAvg -gt 60) { Warn ("Средний пинг в интернет {0} мс." -f $netAvg) 'Задержка выше порога 60 мс. Это может быть заметно в играх и звонках.' 'Приостанови загрузки и повтори замер. Если включён VPN, сравни результаты без него.' }
     $totalSent = ($net | Measure-Object Sent -Sum).Sum
     $lossAll = 0; if ($totalSent) { $lossAll = [math]::Round(100 * $netLoss / $totalSent) }
-    $script:Metric = "≈$netAvg мс · потери $lossAll%"
+    $script:Metric = "Внешние адреса $(Format-PingMs $netAvg) · потери $lossAll%"
+    if ($router) { $script:Metric += " · роутер $(Format-PingMs $router.Avg)" }
     $script:Num = @{ ping = $netAvg; loss = $lossAll }
 }
 
@@ -171,7 +208,7 @@ function Check-Dns {
             $ms = $sw.ElapsedMilliseconds; $times += $ms
             $line = "{0}: {1} мс → {2}" -f $n, $ms, $r.IPAddress
             if ($ms -gt 500) { Bad ("DNS отвечает очень медленно. " + $line) }
-            elseif ($ms -gt 150) { Warn $line }
+            elseif ($ms -gt 150) { Warn $line 'Поиск IP-адреса занял больше 150 мс. Из-за этого сайт может дольше начинать открываться.' 'Повтори проверку. Если ответы стабильно медленные, сравни с другим DNS-сервером.' }
             else { Ok $line }
         } catch { Bad ("{0}: не удалось получить адрес" -f $n) }
     }
@@ -199,7 +236,7 @@ function Check-Load {
         Info ("{0}: ↓ {1:N2} Мбит/с, ↑ {2:N2} Мбит/с" -f $k, $rx, $tx)
         if ($rx -gt $maxRx) { $maxRx = $rx }; if ($tx -gt $maxTx) { $maxTx = $tx }
     }
-    if ($maxRx -gt 50) { Warn "Этот ПК сейчас активно качает — замеры скорости и пинга могут быть хуже обычного." } else { Ok "Компьютер сейчас не нагружает канал" }
+    if ($maxRx -gt 50) { Warn "Этот ПК сейчас активно качает." 'Фоновая загрузка занимает часть канала. Замер скорости и пинга может отличаться от результата без нагрузки.' 'Приостанови загрузки, обновления и синхронизацию файлов, затем повтори замер.' } else { Ok "Компьютер сейчас не нагружает канал" }
     Dim "Это трафик только этого ПК. Телефоны и ТВ видно в веб-интерфейсе роутера (раздел «Устройства»)."
     $script:Metric = "↓{0:N1} ↑{1:N1} Мбит/с" -f $maxRx, $maxTx
 }
@@ -212,7 +249,7 @@ function Check-Connections {
     $wait = @($all | Where-Object { $_.State -in $WaitStates }).Count
     Info ("Всего TCP: {0}, активных: {1}, закрывающихся: {2}" -f $all.Count, $est, $wait)
     if ($wait -gt 1500) { Bad "Очень много зависших соединений: какая-то программа их не закрывает и может «вешать» интернет." }
-    elseif ($wait -gt 500) { Warn "Многовато закрывающихся соединений." }
+    elseif ($wait -gt 500) { Warn "Закрывается $wait TCP-соединений." 'Более 500 соединений ожидают закрытия. Такой всплеск бывает после активной работы сетевых приложений.' 'Если число долго не снижается, посмотри список программ ниже и перезапусти ту, у которой больше всего таких соединений.' }
 
     $names = @{}
     Get-Process -ErrorAction SilentlyContinue | ForEach-Object { $names[[int]$_.Id] = $_.ProcessName }
@@ -226,7 +263,7 @@ function Check-Connections {
         $line = "{0}: всего {1}, активных {2}, висят {3}" -f $n, $g.Count, $e, $w
         if ($g.Count -gt 300 -or $w -gt 150) {
             Bad ("{0} — так вела себя утечка в TgWsProxy. Попробуй закрыть эту программу." -f $line); $leak = $true
-        } elseif ($g.Count -gt 100) { Warn $line }
+        } elseif ($g.Count -gt 100) { Warn $line 'У программы больше 100 TCP-соединений. Для браузера или загрузчика это может быть обычной нагрузкой.' 'Если программа простаивает и число остаётся высоким, перезапусти её и повтори проверку.' }
         else { Info $line }
     }
     if (-not $leak -and $wait -le 500) { Ok "Ни одна программа не копит соединения" }
@@ -234,19 +271,44 @@ function Check-Connections {
 }
 
 # ---------- 7. Скорость ----------
+function Publish-Speed($Event) {
+    if (-not $script:SpeedResponse) { return }
+    try {
+        $json = ConvertTo-Json -InputObject $Event -Depth 5 -Compress
+        $bytes = [Text.Encoding]::UTF8.GetBytes($json + "`n")
+        $script:SpeedResponse.OutputStream.Write($bytes, 0, $bytes.Length)
+        $script:SpeedResponse.OutputStream.Flush()
+    } catch {
+        # A closed browser should not interrupt the measurement.
+        $script:SpeedResponse = $null
+    }
+}
+
 function Test-Download([int]$MaxSec = 12) {
     $url = 'https://speed.cloudflare.com/__down?bytes=25000000'
     $buf = New-Object byte[] 262144; $total = 0
     $sw = [Diagnostics.Stopwatch]::StartNew()
+    $sampleTime = $null; $sampleBytes = 0
     for ($round = 0; $round -lt 4 -and $sw.Elapsed.TotalSeconds -lt $MaxSec; $round++) {
         $req = [Net.HttpWebRequest]::Create($url); $req.Timeout = 10000; $req.ReadWriteTimeout = 10000; $req.UserAgent = 'Dimetrix'
         $resp = $req.GetResponse(); $s = $resp.GetResponseStream()
-        while ($true) {
-            $n = $s.Read($buf, 0, $buf.Length); if ($n -le 0) { break }
-            $total += $n
-            if ($sw.Elapsed.TotalSeconds -ge $MaxSec) { break }
+        if ($null -eq $sampleTime) { $sampleTime = $sw.Elapsed.TotalSeconds }
+        try {
+            while ($true) {
+                $n = $s.Read($buf, 0, $buf.Length); if ($n -le 0) { break }
+                $total += $n
+                $elapsed = $sw.Elapsed.TotalSeconds
+                if ($script:SpeedResponse -and $elapsed - $sampleTime -ge 0.25) {
+                    $rate = [math]::Round(($total - $sampleBytes) * 8 / ($elapsed - $sampleTime) / 1e6, 1)
+                    $fraction = [math]::Max($total / 100000000, $elapsed / $MaxSec)
+                    Publish-Speed @{ type = 'sample'; down = $rate; progress = [math]::Min(75, 75 * $fraction) }
+                    $sampleTime = $elapsed; $sampleBytes = $total
+                }
+                if ($elapsed -ge $MaxSec) { break }
+            }
+        } finally {
+            $s.Close(); $resp.Close()
         }
-        $s.Close(); $resp.Close()
     }
     $sec = $sw.Elapsed.TotalSeconds
     return @([math]::Round($total * 8 / $sec / 1e6, 1), [math]::Round($total / 1MB, 1))
@@ -260,8 +322,20 @@ function Test-Upload([int]$Bytes = 8000000) {
     $sw = [Diagnostics.Stopwatch]::StartNew()
     $st = $req.GetRequestStream(); $left = $Bytes
     while ($left -gt 0) { $n = [math]::Min($buf.Length, $left); $st.Write($buf, 0, $n); $left -= $n }
-    $st.Close(); $resp = $req.GetResponse(); $resp.Close()
+    $st.Close()
+    Publish-Speed @{ type = 'upload-sent'; progress = 95 }
+    $resp = $req.GetResponse(); $resp.Close()
     return [math]::Round($Bytes * 8 / $sw.Elapsed.TotalSeconds / 1e6, 1)
+}
+
+function Test-RateLimit($Exception) {
+    for ($e = $Exception; $null -ne $e; $e = $e.InnerException) {
+        if ($e -is [Net.WebException] -and $e.Response -is [Net.HttpWebResponse]) {
+            try { return ([int]$e.Response.StatusCode -eq 429) }
+            finally { $e.Response.Close() }
+        }
+    }
+    return $false
 }
 
 function Check-Speed {
@@ -272,13 +346,20 @@ function Check-Speed {
     try {
         $dr = Test-Download; $d = $dr[0]
         $line = "Загрузка: {0} Мбит/с (скачано {1} МБ)" -f $dr[0], $dr[1]
-        if ($d -lt 5) { Bad $line } elseif ($d -lt 25) { Warn $line } else { Ok $line }
-    } catch { Bad ("Тест загрузки не удался: " + $_.Exception.Message) }
+        if ($d -lt 5) { Bad $line } elseif ($d -lt 25) { Warn $line 'Загрузка ниже порога 25 Мбит/с. Скачивание файлов и видео высокого качества может идти медленнее.' 'Приостанови другие загрузки и повтори замер по кабелю или ближе к роутеру.' } else { Ok $line }
+    } catch {
+        if (Test-RateLimit $_.Exception) { Warn 'Cloudflare временно ограничил замер загрузки (HTTP 429).' 'Сервер отклонил запрос из-за лимита. Скорость загрузки неизвестна.' 'Подожди несколько минут перед повторным замером.' }
+        else { Bad ("Тест загрузки не удался: " + (Get-ErrText $_.Exception)) }
+    }
+    Publish-Speed @{ type = 'upload'; down = $d; progress = 75 }
     try {
         $u = Test-Upload
         $line = "Отдача: {0} Мбит/с" -f $u
-        if ($u -lt 2) { Bad $line } elseif ($u -lt 10) { Warn $line } else { Ok $line }
-    } catch { Warn ("Тест отдачи не удался: " + $_.Exception.Message) }
+        if ($u -lt 2) { Bad $line } elseif ($u -lt 10) { Warn $line 'Отдача ниже порога 10 Мбит/с. Это может замедлить отправку файлов и ухудшить качество видеосвязи.' 'Приостанови выгрузку файлов и облачную синхронизацию, затем повтори замер.' } else { Ok $line }
+    } catch {
+        if (Test-RateLimit $_.Exception) { Warn 'Cloudflare временно ограничил замер отдачи (HTTP 429).' 'Сервер отклонил запрос из-за лимита. Скорость отдачи неизвестна.' 'Подожди несколько минут перед повторным замером.' }
+        else { Warn ("Тест отдачи не удался: " + (Get-ErrText $_.Exception)) 'Передачу данных не удалось завершить, поэтому скорость отдачи неизвестна.' 'Повтори замер. Если ошибка повторится и включён VPN, сравни результат без него.' }
+    }
     if ($script:SplitRoutes.Count -gt 0) { Dim "Сейчас замер показывает скорость через VPN. Чтобы узнать скорость тарифа, выключи VPN и повтори." }
     $ds = '—'; if ($d -ne $null) { $ds = $d }
     $us = '—'; if ($u -ne $null) { $us = $u }
@@ -295,21 +376,22 @@ function Get-ErrText($ex) {
         if ($e -is [Net.WebException] -or $e -is [Net.Sockets.SocketException]) { break }
         $e = $e.InnerException
     }
-    if ($ex -is [Threading.Tasks.TaskCanceledException] -or $e -is [Threading.Tasks.TaskCanceledException]) { return 'нет ответа (таймаут) — похоже на блокировку или сильное замедление' }
+    if ($ex -is [Threading.Tasks.TaskCanceledException] -or $e -is [Threading.Tasks.TaskCanceledException]) { return 'нет ответа (таймаут)' }
     if ($e -is [Net.WebException]) {
         switch ($e.Status.ToString()) {
-            'NameResolutionFailure' { return 'не удалось узнать адрес (DNS) — сайт заблокирован или проблема с DNS' }
-            'ConnectFailure'        { return 'не удалось подключиться — адрес недоступен или заблокирован' }
-            'SecureChannelFailure'  { return 'обрыв при установке защищённого соединения — типично для блокировки DPI' }
-            'ReceiveFailure'        { return 'соединение сброшено — типично для блокировки DPI' }
-            'ConnectionClosed'      { return 'соединение сброшено — типично для блокировки DPI' }
+            'NameResolutionFailure' { return 'не удалось узнать адрес (DNS)' }
+            'ConnectFailure'        { return 'не удалось подключиться' }
+            'SecureChannelFailure'  { return 'не удалось установить защищённое соединение' }
+            'ReceiveFailure'        { return 'соединение оборвалось при получении данных' }
+            'ConnectionClosed'      { return 'соединение закрыто до получения ответа' }
             'Timeout'               { return 'нет ответа (таймаут)' }
+            'ProtocolError'         { return $e.Message }
             default                 { return $e.Status.ToString() }
         }
     }
     if ($e -is [Net.Sockets.SocketException]) {
         switch ($e.SocketErrorCode.ToString()) {
-            'ConnectionReset'  { return 'соединение сброшено — типично для блокировки' }
+            'ConnectionReset'  { return 'соединение сброшено' }
             'TimedOut'         { return 'нет ответа (таймаут)' }
             'HostNotFound'     { return 'не удалось узнать адрес (DNS)' }
             'ConnectionRefused'{ return 'подключение отклонено' }
@@ -352,7 +434,7 @@ function Test-Endpoints($List, [int]$TimeoutSec = 8) {
     }
     foreach ($j in $jobs) {
         if (-not $j.task) { continue }
-        if (-not $j.task.IsCompleted) { $j.err = 'нет ответа (таймаут) — похоже на блокировку или сильное замедление'; $j.ms = $deadline }
+        if (-not $j.task.IsCompleted) { $j.err = 'нет ответа (таймаут)'; $j.ms = $deadline }
         elseif ($j.task.IsFaulted) { $j.err = Get-ErrText $j.task.Exception }
         elseif ($j.task.IsCanceled) { $j.err = Get-ErrText (New-Object Threading.Tasks.TaskCanceledException) }
         else {
@@ -365,7 +447,7 @@ function Test-Endpoints($List, [int]$TimeoutSec = 8) {
     return $jobs
 }
 
-# Каталог популярных сервисов. Первый адрес у каждого — главный: если он не открывается, сервис считается недоступным.
+# Каталог популярных сервисов. Первый адрес у каждого — главный для проверки соединения.
 $Services = @(
     @{ name = 'YouTube';    cat = 'Видео';       note = 'Если сайт открывается, а видеосерверы нет — видео будет тормозить.'; eps = @(
         @{ name = 'Сайт youtube.com';           url = 'https://www.youtube.com/generate_204' },
@@ -424,8 +506,8 @@ function Check-Popular {
             if ($r.ok) {
                 $okCount++; $times += $r.ms
                 $extra = ''; if ($r.code) { $extra = ", ответ $($r.code)" }
-                $t = "{0}: доступен за {1} мс{2}" -f $r.ep.name, $r.ms, $extra
-                if ($r.ms -gt 2500) { [void]$lines.Add([pscustomobject]@{ l = 'warn'; t = "$t — очень медленно" }); $slow = $true }
+                $t = "{0}: ответ за {1} мс{2}" -f $r.ep.name, $r.ms, $extra
+                if ($r.ms -gt 2500) { [void]$lines.Add([pscustomobject]@{ l = 'warn'; t = $t; reason = 'Ответ занял больше 2,5 секунды. Из-за этого часть сервиса может загружаться с задержкой.' }); $slow = $true }
                 else { [void]$lines.Add([pscustomobject]@{ l = 'ok'; t = $t }) }
             } else {
                 if ($r.ep.main) { $mainOk = $false }
@@ -435,7 +517,7 @@ function Check-Popular {
         if ($s.note) { [void]$lines.Add([pscustomobject]@{ l = 'dim'; t = $s.note }) }
         $avg = $null; if ($times.Count) { $avg = [math]::Round(($times | Measure-Object -Average).Average) }
         $total = $mine.Count
-        if (-not $mainOk -or $okCount -eq 0) { $lv = 'bad'; $st = 'Не открывается' }
+        if (-not $mainOk -or $okCount -eq 0) { $lv = 'bad'; $st = 'Прямой замер не прошёл' }
         elseif ($okCount -lt $total) { $lv = 'warn'; $st = "Частично ($okCount из $total)" }
         elseif ($slow) { $lv = 'warn'; $st = 'Медленно' }
         else { $lv = 'ok'; $st = 'Работает' }
@@ -467,7 +549,7 @@ function Check-Autostart {
     if ($found.Count -eq 0) { Ok "Ничего похожего на VPN или прокси в автозапуске нет" }
     else {
         foreach ($f in $found) { Info $f }
-        if ($found.Count -ge 3) { Warn ("В автозапуске {0} VPN/прокси-компонентов. Вместе они часто мешают друг другу — оставь нужные." -f $found.Count) }
+        if ($found.Count -ge 3) { Warn ("В автозапуске {0} VPN/прокси-компонентов." -f $found.Count) 'Если несколько клиентов одновременно меняют маршруты или настройки прокси, соединение может стать нестабильным.' 'Если есть сбои, проверь список ниже и отключи автозапуск клиентов, которыми не пользуешься.' }
         else { Ok "Немного VPN-компонентов, конфликтов быть не должно" }
     }
     $script:Metric = "$($found.Count) шт."
@@ -525,14 +607,18 @@ if ($Port -eq 0) {
 # История проверок: по одной JSON-записи на строку, хранится в профиле пользователя (не в папке проекта).
 $DataDir = Join-Path $env:APPDATA 'Dimetrix'
 $HistoryPath = Join-Path $DataDir 'history.jsonl'
-$HistoryMax = 300
 function Get-HistoryLines {
     if (-not (Test-Path $HistoryPath)) { return @() }
     return @([IO.File]::ReadAllLines($HistoryPath, [Text.Encoding]::UTF8) | Where-Object { $_.Trim() })
 }
 function Set-HistoryLines($Lines) {
-    if (-not (Test-Path $DataDir)) { New-Item -ItemType Directory -Path $DataDir | Out-Null }
-    [IO.File]::WriteAllLines($HistoryPath, [string[]]@($Lines), (New-Object Text.UTF8Encoding($false)))
+    [void][IO.Directory]::CreateDirectory($DataDir)
+    $tempPath = Join-Path $DataDir ("history-" + [guid]::NewGuid().ToString('N') + '.tmp')
+    try {
+        [IO.File]::WriteAllLines($tempPath, [string[]]@($Lines), (New-Object Text.UTF8Encoding($false)))
+        if ([IO.File]::Exists($HistoryPath)) { [IO.File]::Replace($tempPath, $HistoryPath, [NullString]::Value) }
+        else { [IO.File]::Move($tempPath, $HistoryPath) }
+    } finally { if ([IO.File]::Exists($tempPath)) { [IO.File]::Delete($tempPath) } }
 }
 function Read-Body($Ctx) {
     $sr = New-Object IO.StreamReader($Ctx.Request.InputStream, [Text.Encoding]::UTF8)
@@ -567,11 +653,12 @@ if (-not $NoBrowser) {
 }
 
 $lastSeen = Get-Date
+$idleTimeout = [TimeSpan]::FromMinutes(10)
 try {
     while ($listener.IsListening) {
         $task = $listener.GetContextAsync()
         while (-not $task.Wait(1000)) {
-            if (((Get-Date) - $lastSeen).TotalSeconds -gt 40) { $listener.Stop(); break }
+            if (((Get-Date) - $lastSeen) -gt $idleTimeout) { $listener.Stop(); break }
         }
         if (-not $listener.IsListening) { break }
         $ctx = $task.Result
@@ -589,9 +676,25 @@ try {
                     $list = foreach ($k in $Steps.Keys) { [pscustomobject]@{ id = $k; title = $Steps[$k].title; slow = $Steps[$k].slow } }
                     Send $ctx 200 'application/json; charset=utf-8' (ConvertTo-Json @($list) -Compress)
                 }
+                '/api/network' { Send $ctx 200 'application/json; charset=utf-8' ((Get-NetworkContext) | ConvertTo-Json -Compress) }
                 '/api/run' {
                     $id = $ctx.Request.QueryString['step']
                     if (-not $Steps.Contains($id)) { Send $ctx 404 'text/plain' 'unknown step' }
+                    elseif ($id -eq 'speed' -and $ctx.Request.QueryString['live'] -eq '1') {
+                        $response = $ctx.Response
+                        $response.ContentType = 'application/x-ndjson; charset=utf-8'
+                        $response.Headers['Cache-Control'] = 'no-store'
+                        $response.SendChunked = $true
+                        $script:SpeedResponse = $response
+                        try {
+                            Publish-Speed @{ type = 'start' }
+                            $result = Invoke-Step $id
+                            Publish-Speed @{ type = 'result'; result = $result }
+                        } finally {
+                            $script:SpeedResponse = $null
+                            $response.Close()
+                        }
+                    }
                     else { Send $ctx 200 'application/json; charset=utf-8' ((Invoke-Step $id) | ConvertTo-Json -Depth 4 -Compress) }
                 }
                 { $_ -in '/logo.png', '/logo-dark.png', '/icon.png' } {
@@ -614,7 +717,6 @@ try {
                         if (-not $obj.id -or $obj.type -notin 'overview','sites') { Send $ctx 400 'text/plain' 'bad entry'; break }
                         $line = $body -replace "[\r\n]+", ' '
                         $all = @(Get-HistoryLines) + $line
-                        if ($all.Count -gt $HistoryMax) { $all = $all[($all.Count - $HistoryMax)..($all.Count - 1)] }
                         Set-HistoryLines $all
                         Send $ctx 200 'text/plain' 'saved'
                     } else {
